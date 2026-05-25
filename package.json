@@ -1,0 +1,14 @@
+{
+  "name": "stock-checker",
+  "private": true,
+  "workspaces": ["server", "web"],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,green \"npm run dev -w stock-checker-server\" \"npm run dev -w stock-checker-web\"",
+    "build": "npm run build -w stock-checker-web",
+    "start": "npm run start -w stock-checker-server",
+    "test": "npm run test -w stock-checker-server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

@@ -1,0 +1,49 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: dark;
+  font-family: "Instrument Sans", system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+
+  --bg: #0c0f14;
+  --bg-elevated: #141a24;
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #e8edf5;
+  --muted: #8b97ab;
+  --accent: #6ee7b7;
+  --accent-dim: rgba(110, 231, 183, 0.15);
+  --danger: #f87171;
+  --danger-dim: rgba(248, 113, 113, 0.12);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
