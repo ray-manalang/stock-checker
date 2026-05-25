@@ -1,10 +1,16 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 import { analyzeTicker } from "./analyze.js";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = Number(process.env.PORT) || 3001;
+const staticDir = process.env.STATIC_DIR
+  ? path.resolve(process.env.STATIC_DIR)
+  : null;
 
 app.use(cors({ origin: process.env.CORS_ORIGIN ?? true }));
 app.use(express.json());
@@ -31,6 +37,17 @@ app.post("/api/analyze", async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`API listening on http://localhost:${port}`);
+if (staticDir) {
+  app.use(express.static(staticDir));
+  app.get(/^\/(?!api\/).*/, (_req, res) => {
+    res.sendFile(path.join(staticDir, "index.html"));
+  });
+}
+
+app.listen(port, "0.0.0.0", () => {
+  console.log(
+    staticDir
+      ? `Stock Checker listening on http://0.0.0.0:${port} (UI + API)`
+      : `API listening on http://0.0.0.0:${port}`,
+  );
 });
