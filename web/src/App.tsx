@@ -144,7 +144,17 @@ export default function App() {
       )}
 
       <footer className="footer">
-        <p>Runs locally. No paid market data APIs.</p>
+        {quote && (
+          <p>
+            <a
+              href={`https://finance.yahoo.com/quote/${quote.ticker}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {quote.ticker} on Yahoo Finance
+            </a>
+          </p>
+        )}
       </footer>
     </div>
   );
