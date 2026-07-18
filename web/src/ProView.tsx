@@ -18,6 +18,7 @@ type Macro = {
 };
 type ScannerRow = {
   ticker: string;
+  name?: string | null;
   composite: number;
   rank: number;
   rankFlag?: string;
@@ -186,18 +187,28 @@ export function ProView() {
             {rows.slice(0, 10).map((r) => (
               <div className="s-row" key={r.ticker}>
                 <span className="s-rank">{r.rank}</span>
-                <span className="s-name">
-                  {r.ticker}
-                  {r.rankFlag === "upgrade" && (
-                    <span className="pill up" style={{ marginLeft: 8, fontSize: 11 }}>
-                      ▲ upgrade
-                    </span>
-                  )}
-                  {r.rankFlag === "downgrade" && (
-                    <span className="pill down" style={{ marginLeft: 8, fontSize: 11 }}>
-                      ▼ downgrade
-                    </span>
-                  )}
+                <span className="s-main">
+                  <span className="s-name">
+                    <a
+                      href={`https://finance.yahoo.com/quote/${r.ticker}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "var(--text)", textDecoration: "none" }}
+                    >
+                      {r.ticker}
+                    </a>
+                    {r.rankFlag === "upgrade" && (
+                      <span className="pill up" style={{ marginLeft: 8, fontSize: 11 }}>
+                        ▲ upgrade
+                      </span>
+                    )}
+                    {r.rankFlag === "downgrade" && (
+                      <span className="pill down" style={{ marginLeft: 8, fontSize: 11 }}>
+                        ▼ downgrade
+                      </span>
+                    )}
+                  </span>
+                  {r.name && <span className="s-sub">{r.name}</span>}
                 </span>
                 <span className="s-score">{num(r.composite, 0)}</span>
               </div>

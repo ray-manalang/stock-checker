@@ -688,15 +688,33 @@ input {
   font-size: 14px;
   flex: none;
 }
-.s-name {
+.s-main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.s-name {
   font-weight: 600;
   font-size: 16px;
+  display: flex;
+  align-items: center;
+}
+.s-name a:hover {
+  text-decoration: underline !important;
+}
+.s-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .s-score {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
+  flex: none;
 }
 
 /* ---------- banners / states ---------- */

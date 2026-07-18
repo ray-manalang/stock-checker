@@ -24,6 +24,7 @@ import {
   runAnalystJob,
 } from "./scheduler.js";
 import { blend } from "./analyst/blender.js";
+import { NAMES } from "./scanner/names.js";
 
 function normSym(s) {
   return String(s ?? "").trim().toUpperCase().replace(/\./g, "-");
@@ -141,7 +142,7 @@ app.get("/api/scanner", (_req, res) => {
     macroMode: run.macroMode,
     scannerActive: run.macroMode !== "DEFENSIVE",
     blended,
-    data: rows,
+    data: rows.map((r) => ({ ...r, name: NAMES[r.ticker] ?? null })),
   });
 });
 

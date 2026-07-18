@@ -1,0 +1,33 @@
+// Display names for the large-cap scan universe. Attached to scanner rows at
+// read time (no extra fetches). Symbols outside this map fall back to the
+// ticker in the UI.
+export const NAMES = {
+  AAPL: "Apple", MSFT: "Microsoft", NVDA: "NVIDIA", AMZN: "Amazon",
+  GOOGL: "Alphabet (Google)", META: "Meta Platforms", TSLA: "Tesla",
+  AVGO: "Broadcom", "BRK-B": "Berkshire Hathaway", JPM: "JPMorgan Chase",
+  LLY: "Eli Lilly", V: "Visa", UNH: "UnitedHealth", XOM: "Exxon Mobil",
+  JNJ: "Johnson & Johnson", WMT: "Walmart", MA: "Mastercard",
+  PG: "Procter & Gamble", HD: "Home Depot", COST: "Costco", ORCL: "Oracle",
+  MRK: "Merck", ABBV: "AbbVie", CVX: "Chevron", KO: "Coca-Cola",
+  PEP: "PepsiCo", ADBE: "Adobe", CRM: "Salesforce", BAC: "Bank of America",
+  NFLX: "Netflix", AMD: "AMD", TMO: "Thermo Fisher", MCD: "McDonald's",
+  CSCO: "Cisco", ACN: "Accenture", LIN: "Linde", ABT: "Abbott",
+  DHR: "Danaher", WFC: "Wells Fargo", TXN: "Texas Instruments",
+  QCOM: "Qualcomm", INTC: "Intel", INTU: "Intuit", VZ: "Verizon", IBM: "IBM",
+  AMGN: "Amgen", PM: "Philip Morris", CAT: "Caterpillar", GE: "GE Aerospace",
+  NOW: "ServiceNow", UNP: "Union Pacific", NKE: "Nike", COP: "ConocoPhillips",
+  HON: "Honeywell", SPGI: "S&P Global", UBER: "Uber", LOW: "Lowe's",
+  GS: "Goldman Sachs", BKNG: "Booking Holdings", MS: "Morgan Stanley",
+  AXP: "American Express", T: "AT&T", BLK: "BlackRock", PFE: "Pfizer",
+  SCHW: "Charles Schwab", ISRG: "Intuitive Surgical", RTX: "RTX",
+  ELV: "Elevance Health", PLD: "Prologis", BA: "Boeing", SYK: "Stryker",
+  TJX: "TJX Companies", MDT: "Medtronic", GILD: "Gilead Sciences",
+  C: "Citigroup", VRTX: "Vertex Pharmaceuticals", LMT: "Lockheed Martin",
+  ADP: "ADP", MMC: "Marsh & McLennan", REGN: "Regeneron", CB: "Chubb",
+  ETN: "Eaton", ZTS: "Zoetis", AMT: "American Tower", MO: "Altria",
+  BSX: "Boston Scientific", CI: "The Cigna Group", PGR: "Progressive",
+  SO: "Southern Company", BMY: "Bristol-Myers Squibb", DE: "Deere",
+  MU: "Micron", FI: "Fiserv", DUK: "Duke Energy", PANW: "Palo Alto Networks",
+  SLB: "SLB", APH: "Amphenol", KLAC: "KLA", SNPS: "Synopsys",
+  CDNS: "Cadence Design",
+};
