@@ -166,12 +166,22 @@ export function latestScanner(limit = 50) {
 
 // ---------- analyst ----------
 export function getAnalystScore(ticker, quarterEnd, model) {
+  // No model → match any cached row for this ticker+quarter (the Check flow
+  // caches under the deep-dive model, so a null filter must not exclude it).
+  if (model == null) {
+    return db()
+      .prepare(
+        `SELECT * FROM analyst_scores WHERE ticker = ? AND quarter_end = ?
+         ORDER BY computed_at DESC LIMIT 1`,
+      )
+      .get(ticker, quarterEnd);
+  }
   return db()
     .prepare(
       `SELECT * FROM analyst_scores WHERE ticker = ? AND quarter_end = ?
        AND (model = ? OR model IS NULL) LIMIT 1`,
     )
-    .get(ticker, quarterEnd, model ?? null);
+    .get(ticker, quarterEnd, model);
 }
 
 /** Latest fundamental score per ticker (any quarter), for the blender. */
