@@ -28,6 +28,7 @@ import {
 } from "./scheduler.js";
 import { blend } from "./analyst/blender.js";
 import { NAMES } from "./scanner/names.js";
+import { checkAlerts } from "./alerts.js";
 
 function normSym(s) {
   return String(s ?? "").trim().toUpperCase().replace(/\./g, "-");
@@ -205,6 +206,17 @@ app.post("/api/alerts", (req, res) => {
 app.delete("/api/alerts/:id", (req, res) => {
   removeAlert(Number(req.params.id));
   res.json({ ok: true, data: listAlerts() });
+});
+
+// Run the alert check now (instead of waiting for the 10-min cron) — useful for
+// testing email delivery.
+app.post("/api/alerts/check", async (_req, res) => {
+  try {
+    const result = await checkAlerts();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "check failed" });
+  }
 });
 
 // Kick a background recompute; returns immediately.

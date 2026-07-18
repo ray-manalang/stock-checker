@@ -12,6 +12,11 @@ services:
       # Optional fallback data source. Yahoo via the built-in Python sidecar is
       # primary; Twelve Data is only used if the sidecar is unavailable.
       TWELVE_DATA_API_KEY: ${TWELVE_DATA_API_KEY:-}
+      # Buy-zone alert emails via Resend (optional). Without these, alerts still
+      # trigger (status flips) but no email is sent.
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      ALERT_EMAIL: ${ALERT_EMAIL:-}
+      ALERT_FROM: ${ALERT_FROM:-Market Specialist <onboarding@resend.dev>}
       PORT: "3001"
       STATIC_DIR: /app/web/dist
       # Persist the SQLite store (watchlist, alerts, cached scores, usage) on a
