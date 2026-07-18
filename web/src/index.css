@@ -606,6 +606,10 @@ input {
   letter-spacing: 0.05em;
   color: var(--text-3);
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
 }
 .insight-cell .val {
   font-size: 18px;

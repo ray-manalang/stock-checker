@@ -33,6 +33,16 @@ const ZONE_TONE: Record<string, string> = {
   DEFENSIVE: "down",
 };
 
+// Map each macro signal name to its glossary entry.
+const SIGNAL_KEY: Record<string, string> = {
+  "VIX Level": "sigVixLevel",
+  "VIX Term Structure": "sigVixTerm",
+  "Market Breadth": "sigBreadth",
+  "Credit Spreads": "sigCredit",
+  "Put/Call Sentiment": "sigPutCall",
+  "Factor Crowding": "sigCrowding",
+};
+
 function agoLabel(iso?: string): string {
   if (!iso) return "";
   const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
@@ -129,25 +139,41 @@ export function ProView() {
           <>
             <div className="insight-cells">
               <div className="insight-cell">
-                <div className="label">Deploy score</div>
+                <div className="label">
+                  Deploy score{" "}
+                  <InfoTip title={GLOSSARY.deployScore.title} text={GLOSSARY.deployScore.text} label="deploy score" />
+                </div>
                 <div className="val hl">{num(m.composite, 0)}</div>
               </div>
               <div className="insight-cell">
-                <div className="label">Sizing</div>
+                <div className="label">
+                  Sizing{" "}
+                  <InfoTip title={GLOSSARY.sizing.title} text={GLOSSARY.sizing.text} label="sizing" />
+                </div>
                 <div className="val">{m.sizingPct}%</div>
               </div>
               <div className="insight-cell">
-                <div className="label">Scanner</div>
+                <div className="label">
+                  Scanner{" "}
+                  <InfoTip title={GLOSSARY.scannerState.title} text={GLOSSARY.scannerState.text} label="scanner" />
+                </div>
                 <div className="val">{m.scannerActive ? "On" : "Off"}</div>
               </div>
             </div>
             <div className="sig-grid">
-              {m.signals.map((s) => (
-                <div className="sig" key={s.signal}>
-                  <span className="sn">{s.signal}</span>
-                  <span className="ss">{num(s.score, 0)}</span>
-                </div>
-              ))}
+              {m.signals.map((s) => {
+                const g = GLOSSARY[SIGNAL_KEY[s.signal]];
+                const text = g ? (s.detail ? `${g.text} Now: ${s.detail}.` : g.text) : s.detail ?? "";
+                return (
+                  <div className="sig" key={s.signal}>
+                    <span className="sn">
+                      {s.signal}{" "}
+                      {g && <InfoTip title={g.title} text={text} label={s.signal} />}
+                    </span>
+                    <span className="ss">{num(s.score, 0)}</span>
+                  </div>
+                );
+              })}
             </div>
             <div className="insight-foot">
               updated {agoLabel(macro?.asOf)} · loads instantly
