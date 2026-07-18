@@ -27,6 +27,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<CheckResponse | null>(null);
   const [watchlist, setWatchlist] = useState<string[]>([]);
+  const [watchInput, setWatchInput] = useState("");
 
   useEffect(() => {
     getWatchlist()
@@ -40,6 +41,17 @@ export default function App() {
       const next = watchlist.includes(symbol)
         ? await removeFromWatchlist(symbol)
         : await addToWatchlist(symbol);
+      setWatchlist(next.map((x) => x.ticker));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function addWatch(sym: string) {
+    const symbol = sym.trim().toUpperCase();
+    if (!symbol || watchlist.includes(symbol)) return;
+    try {
+      const next = await addToWatchlist(symbol);
       setWatchlist(next.map((x) => x.ticker));
     } catch {
       /* ignore */
@@ -121,30 +133,61 @@ export default function App() {
         ))}
       </div>
 
-      {watchlist.length > 0 && (
-        <div className="chips" style={{ marginTop: -12 }}>
-          <span className="star" style={{ color: "var(--star)", alignSelf: "center", fontSize: 13 }}>
-            ★ Watchlist:
+      <div className="chips" style={{ marginTop: -12, alignItems: "center" }}>
+        <span className="star" style={{ color: "var(--star)", alignSelf: "center", fontSize: 13 }}>
+          ★ Watchlist:
+        </span>
+        {watchlist.map((t) => (
+          <span key={t} className="chip" style={{ display: "inline-flex", gap: 8 }}>
+            <button
+              onClick={() => run(t)}
+              style={{ background: "none", border: "none", color: "inherit", padding: 0 }}
+            >
+              {t}
+            </button>
+            <button
+              onClick={() => toggleWatch(t)}
+              aria-label={`Remove ${t}`}
+              style={{ background: "none", border: "none", color: "var(--text-3)", padding: 0 }}
+            >
+              ×
+            </button>
           </span>
-          {watchlist.map((t) => (
-            <span key={t} className="chip" style={{ display: "inline-flex", gap: 8 }}>
-              <button
-                onClick={() => run(t)}
-                style={{ background: "none", border: "none", color: "inherit", padding: 0 }}
-              >
-                {t}
-              </button>
-              <button
-                onClick={() => toggleWatch(t)}
-                aria-label={`Remove ${t}`}
-                style={{ background: "none", border: "none", color: "var(--text-3)", padding: 0 }}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
+        ))}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            addWatch(watchInput);
+            setWatchInput("");
+          }}
+          style={{ display: "inline-flex", gap: 6 }}
+        >
+          <input
+            value={watchInput}
+            onChange={(e) => setWatchInput(e.target.value.toUpperCase())}
+            placeholder="+ Add ticker"
+            aria-label="Add a ticker to your watchlist"
+            spellCheck={false}
+            autoComplete="off"
+            style={{
+              width: 120,
+              background: "var(--surface-2)",
+              border: "1px solid var(--hairline-soft)",
+              borderRadius: 999,
+              color: "var(--text)",
+              padding: "6px 13px",
+              fontSize: 13,
+              letterSpacing: "0.03em",
+              outline: "none",
+            }}
+          />
+          {watchInput.trim() && (
+            <button type="submit" className="chip" style={{ color: "var(--accent)" }}>
+              Add
+            </button>
+          )}
+        </form>
+      </div>
 
       {error && (
         <div className="banner banner-error" role="alert">

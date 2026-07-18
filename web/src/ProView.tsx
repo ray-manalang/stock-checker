@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { InfoTip } from "./components/InfoTip";
+import { refreshLayer } from "./api";
 import { GLOSSARY } from "./lib/glossary";
 import { num } from "./lib/format";
 
@@ -37,28 +38,57 @@ function agoLabel(iso?: string): string {
   return hrs < 24 ? `${hrs}h ago` : `${Math.round(hrs / 24)}d ago`;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export function ProView() {
   const [macro, setMacro] = useState<Envelope<Macro> | null>(null);
   const [scanner, setScanner] = useState<Envelope<ScannerRow[]> | null>(null);
   const [macroReady, setMacroReady] = useState(false);
   const [scanReady, setScanReady] = useState(false);
+  const [refreshing, setRefreshing] = useState<{ macro?: boolean; scanner?: boolean }>({});
+  const liveRef = useRef(true);
+
+  const loadMacro = useCallback(async () => {
+    const j = await fetch("/api/macro").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (liveRef.current) setMacro(j);
+    return j as Envelope<Macro> | null;
+  }, []);
+
+  const loadScanner = useCallback(async () => {
+    const j = await fetch("/api/scanner").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (liveRef.current) setScanner(j);
+    return j as Envelope<ScannerRow[]> | null;
+  }, []);
 
   useEffect(() => {
-    let live = true;
-    fetch("/api/macro")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => live && setMacro(j))
-      .catch(() => {})
-      .finally(() => live && setMacroReady(true));
-    fetch("/api/scanner")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => live && setScanner(j))
-      .catch(() => {})
-      .finally(() => live && setScanReady(true));
+    liveRef.current = true;
+    loadMacro().finally(() => liveRef.current && setMacroReady(true));
+    loadScanner().finally(() => liveRef.current && setScanReady(true));
     return () => {
-      live = false;
+      liveRef.current = false;
     };
-  }, []);
+  }, [loadMacro, loadScanner]);
+
+  // Kick a background recompute, then poll the read endpoint until its "as of"
+  // stamp changes (or we give up). Scanner can take minutes on first run.
+  async function refresh(layer: "macro" | "scanner") {
+    const prevAsOf = (layer === "macro" ? macro : scanner)?.asOf;
+    const load = layer === "macro" ? loadMacro : loadScanner;
+    const attempts = layer === "macro" ? 30 : 60; // ~2.5 min / ~15 min
+    setRefreshing((s) => ({ ...s, [layer]: true }));
+    try {
+      await refreshLayer(layer);
+      for (let i = 0; i < attempts && liveRef.current; i++) {
+        await sleep(layer === "macro" ? 5000 : 15000);
+        const j = await load();
+        if (j?.asOf && j.asOf !== prevAsOf) break;
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      if (liveRef.current) setRefreshing((s) => ({ ...s, [layer]: false }));
+    }
+  }
 
   const m = macro?.data;
   const rows = scanner?.data ?? [];
@@ -77,9 +107,10 @@ export function ProView() {
               {m ? m.oneLiner : "The macro gate scores the whole market's risk backdrop."}
             </div>
           </div>
-          {m && (
-            <span className={`pill ${ZONE_TONE[m.zone] ?? "accent"}`}>{m.zone}</span>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {m && <span className={`pill ${ZONE_TONE[m.zone] ?? "accent"}`}>{m.zone}</span>}
+            <RefreshBtn onClick={() => refresh("macro")} busy={!!refreshing.macro} />
+          </div>
         </div>
         <div className="insight-divider" />
         {m ? (
@@ -124,12 +155,20 @@ export function ProView() {
         <div className="insight-head">
           <div>
             <h3>Top-ranked stocks</h3>
-            <div className="subtitle">Quant scanner across the S&amp;P 500.</div>
+            <div className="subtitle">Quant scanner across the largest US names.</div>
           </div>
-          {rows.length > 0 && (
-            <span className="subtitle">ranked {agoLabel(scanner?.asOf)}</span>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {rows.length > 0 && (
+              <span className="subtitle">ranked {agoLabel(scanner?.asOf)}</span>
+            )}
+            <RefreshBtn onClick={() => refresh("scanner")} busy={!!refreshing.scanner} />
+          </div>
         </div>
+        {refreshing.scanner && (
+          <div className="insight-foot" style={{ paddingTop: 4 }}>
+            Rescanning… this can take a few minutes on the free data tier.
+          </div>
+        )}
         <div className="insight-divider" />
         {rows.length > 0 ? (
           <div className="rows" style={{ border: "none", borderRadius: 0 }}>
@@ -156,11 +195,27 @@ export function ProView() {
         ) : (
           <div className="insight-foot" style={{ padding: "18px" }}>
             {scanReady
-              ? "Enable the scanner (Phase 2) to see the top-ranked names here."
+              ? refreshing.scanner
+                ? "Building the first ranking…"
+                : "No ranking yet — hit Refresh to run the scanner."
               : "Loading…"}
           </div>
         )}
       </div>
     </>
+  );
+}
+
+function RefreshBtn({ onClick, busy }: { onClick: () => void; busy: boolean }) {
+  return (
+    <button
+      className="btn-ghost btn-sm"
+      onClick={onClick}
+      disabled={busy}
+      title="Recompute now"
+      style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+    >
+      {busy ? <span className="spinner" style={{ width: 13, height: 13 }} /> : "↻"} Refresh
+    </button>
   );
 }
