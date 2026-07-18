@@ -144,7 +144,9 @@ export function ProView() {
         ) : (
           <div className="insight-foot" style={{ padding: "18px" }}>
             {macroReady
-              ? "Enable the macro gate (Phase 1) to see the deploy score and 6-signal grid here."
+              ? refreshing.macro
+                ? "Computing market conditions…"
+                : "No reading yet — hit Refresh to score market conditions."
               : "Loading…"}
           </div>
         )}
