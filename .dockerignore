@@ -1,0 +1,13 @@
+node_modules
+web/dist
+server/.env
+.env
+.git
+.tmp-asutility
+*.log
+.DS_Store
+server/.venv
+.venv
+*.db
+*.db-wal
+*.db-shm
