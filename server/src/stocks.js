@@ -95,6 +95,16 @@ export async function fetchChart(ticker, range = "1y") {
     return fixtureChart(symbol, range);
   }
 
+  // Preferred: a keyed provider with a real free tier (Yahoo hard-429s many
+  // networks). Twelve Data first when configured.
+  if (process.env.TWELVE_DATA_API_KEY?.trim()) {
+    try {
+      return await fetchTwelveDataChart(symbol, range);
+    } catch {
+      /* fall through to Yahoo/Stooq */
+    }
+  }
+
   try {
     return await fetchYahooChart(symbol, range);
   } catch (yahooErr) {
@@ -109,6 +119,57 @@ export async function fetchChart(ticker, range = "1y") {
       throw yahooErr; // surface the primary error
     }
   }
+}
+
+// Free daily OHLCV via Twelve Data (https://twelvedata.com — free API key).
+async function fetchTwelveDataChart(symbol, range) {
+  const key = process.env.TWELVE_DATA_API_KEY.trim();
+  const outputsize = range === "5y" ? 1300 : range === "5d" ? 10 : 300;
+  // Twelve Data uses dotted class shares (BRK.B); we store hyphens internally.
+  const tdSym = symbol.replace(/-/g, ".");
+  const url =
+    `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSym)}` +
+    `&interval=1day&outputsize=${outputsize}&order=ASC&apikey=${encodeURIComponent(key)}`;
+  const res = await fetch(url, { headers: { "User-Agent": UA } });
+  if (!res.ok) throw new Error(`Twelve Data ${res.status}`);
+  const data = await res.json();
+  if (data.status === "error" || !Array.isArray(data.values)) {
+    throw new Error(data.message || `No Twelve Data for "${symbol}"`);
+  }
+
+  const timestamp = [];
+  const open = [];
+  const high = [];
+  const low = [];
+  const close = [];
+  const volume = [];
+  for (const row of data.values) {
+    const c = Number(row.close);
+    if (!Number.isFinite(c)) continue;
+    timestamp.push(Math.floor(new Date(row.datetime).getTime() / 1000));
+    open.push(Number(row.open) || c);
+    high.push(Number(row.high) || c);
+    low.push(Number(row.low) || c);
+    close.push(c);
+    volume.push(Number(row.volume) || 0);
+  }
+  if (close.length < 2) throw new Error(`No Twelve Data for "${symbol}"`);
+
+  const price = close[close.length - 1];
+  const prev = close[close.length - 2];
+  const oneYear = close.slice(-252);
+  return {
+    quote: {
+      ticker: symbol,
+      name: data.meta?.name ?? symbol,
+      price,
+      changePct: prev > 0 ? ((price - prev) / prev) * 100 : null,
+      high52: Math.max(...oneYear),
+      low52: Math.min(...oneYear),
+      currency: data.meta?.currency ?? "USD",
+    },
+    series: { timestamp, open, high, low, close, volume },
+  };
 }
 
 async function fetchYahooChart(symbol, range) {
