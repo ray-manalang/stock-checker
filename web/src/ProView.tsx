@@ -64,8 +64,15 @@ export function ProView() {
     liveRef.current = true;
     loadMacro().finally(() => liveRef.current && setMacroReady(true));
     loadScanner().finally(() => liveRef.current && setScanReady(true));
+    // Poll in the background so the cards pick up any completed job (a manual
+    // refresh, the boot compute, or a scheduled run) without a page reload.
+    const id = setInterval(() => {
+      loadMacro();
+      loadScanner();
+    }, 30000);
     return () => {
       liveRef.current = false;
+      clearInterval(id);
     };
   }, [loadMacro, loadScanner]);
 
@@ -74,7 +81,8 @@ export function ProView() {
   async function refresh(layer: "macro" | "scanner") {
     const prevAsOf = (layer === "macro" ? macro : scanner)?.asOf;
     const load = layer === "macro" ? loadMacro : loadScanner;
-    const attempts = layer === "macro" ? 30 : 60; // ~2.5 min / ~15 min
+    // Windows sized to the first-run compute (Twelve Data paces at 8/min).
+    const attempts = layer === "macro" ? 60 : 80; // ~5 min / ~20 min
     setRefreshing((s) => ({ ...s, [layer]: true }));
     try {
       await refreshLayer(layer);
