@@ -186,7 +186,7 @@ export function ProView() {
         <div className="insight-divider" />
         {rows.length > 0 ? (
           <div className="rows" style={{ border: "none", borderRadius: 0 }}>
-            {rows.slice(0, 10).map((r) => (
+            {rows.slice(0, 20).map((r) => (
               <div className="s-row" key={r.ticker}>
                 <span className="s-rank">{r.rank}</span>
                 <span className="s-main">
