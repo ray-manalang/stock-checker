@@ -716,6 +716,23 @@ input {
   font-weight: 700;
   flex: none;
 }
+.s-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex: none;
+}
+.s-px {
+  font-weight: 700;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.s-chg {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ---------- banners / states ---------- */
 .banner {

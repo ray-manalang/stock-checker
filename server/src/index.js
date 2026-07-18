@@ -16,6 +16,7 @@ import {
   addAlert,
   removeAlert,
   usageThisMonth,
+  getCachedSeries,
 } from "./db.js";
 import {
   startScheduler,
@@ -142,7 +143,18 @@ app.get("/api/scanner", (_req, res) => {
     macroMode: run.macroMode,
     scannerActive: run.macroMode !== "DEFENSIVE",
     blended,
-    data: rows.map((r) => ({ ...r, name: NAMES[r.ticker] ?? null })),
+    data: rows.map((r) => {
+      // Last close + daily change from the cached series (no extra fetch).
+      const s = getCachedSeries(r.ticker);
+      let price = null;
+      let changePct = null;
+      if (s?.closes?.length) {
+        price = s.closes[s.closes.length - 1];
+        const prev = s.closes[s.closes.length - 2];
+        changePct = prev > 0 ? ((price - prev) / prev) * 100 : null;
+      }
+      return { ...r, name: NAMES[r.ticker] ?? null, price, changePct };
+    }),
   });
 });
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { InfoTip } from "./components/InfoTip";
 import { refreshLayer } from "./api";
 import { GLOSSARY } from "./lib/glossary";
-import { num } from "./lib/format";
+import { money, num } from "./lib/format";
 
 type Envelope<T> = { data: T; asOf: string; stale?: boolean };
 type ScannerEnv = Envelope<ScannerRow[]> & { macroMode?: string; scannerActive?: boolean };
@@ -23,6 +23,8 @@ type ScannerRow = {
   rank: number;
   rankFlag?: string;
   blendedScore?: number;
+  price?: number | null;
+  changePct?: number | null;
 };
 
 const ZONE_TONE: Record<string, string> = {
@@ -210,7 +212,18 @@ export function ProView() {
                   </span>
                   {r.name && <span className="s-sub">{r.name}</span>}
                 </span>
-                <span className="s-score">{num(r.composite, 0)}</span>
+                <span className="s-meta">
+                  <span className="s-px">{money(r.price, "USD")}</span>
+                  {r.changePct != null ? (
+                    <span className={`s-chg ${r.changePct >= 0 ? "up" : "down"}`}>
+                      {r.changePct >= 0 ? "▲" : "▼"} {Math.abs(r.changePct).toFixed(2)}%
+                    </span>
+                  ) : (
+                    <span className="s-chg" style={{ color: "var(--text-3)" }}>
+                      score {num(r.composite, 0)}
+                    </span>
+                  )}
+                </span>
               </div>
             ))}
           </div>
