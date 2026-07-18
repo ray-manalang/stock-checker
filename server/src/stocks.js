@@ -19,6 +19,63 @@ function normalizeSymbol(ticker) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const BROWSER_HEADERS = {
+  "User-Agent": UA,
+  Accept: "text/html,application/xhtml+xml,application/json,*/*",
+  "Accept-Language": "en-US,en;q=0.9",
+};
+
+// Yahoo increasingly 429s requests that lack a session cookie + crumb (the same
+// anti-bot flow yfinance works around). We prime one once and reuse it.
+let _session = { cookie: null, crumb: null, ts: 0 };
+const SESSION_TTL_MS = 30 * 60 * 1000;
+
+function parseCookies(res) {
+  const setCookie =
+    typeof res.headers.getSetCookie === "function"
+      ? res.headers.getSetCookie()
+      : [res.headers.get("set-cookie")].filter(Boolean);
+  const pairs = setCookie.map((c) => c.split(";")[0]).filter(Boolean);
+  return pairs.join("; ");
+}
+
+async function getYahooSession(force = false) {
+  if (!force && _session.cookie && Date.now() - _session.ts < SESSION_TTL_MS) {
+    return _session;
+  }
+  // 1) Prime a cookie. fc.yahoo.com 404s but sets the A1/A3 cookies we need.
+  let cookie = "";
+  for (const url of ["https://fc.yahoo.com/", "https://finance.yahoo.com/"]) {
+    try {
+      const res = await fetch(url, { headers: BROWSER_HEADERS, redirect: "follow" });
+      const c = parseCookies(res);
+      if (c) {
+        cookie = c;
+        break;
+      }
+    } catch {
+      /* try next */
+    }
+  }
+  // 2) Fetch a crumb using that cookie (needed for quoteSummary; harmless for chart).
+  let crumb = null;
+  if (cookie) {
+    try {
+      const res = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
+        headers: { ...BROWSER_HEADERS, Cookie: cookie },
+      });
+      if (res.ok) {
+        const text = (await res.text()).trim();
+        if (text && !text.includes("<")) crumb = text;
+      }
+    } catch {
+      /* crumb optional for chart */
+    }
+  }
+  _session = { cookie, crumb, ts: Date.now() };
+  return _session;
+}
+
 /**
  * Fetch a ticker's quote + full daily OHLCV series.
  * Returns { quote, series } where
@@ -57,19 +114,23 @@ export async function fetchChart(ticker, range = "1y") {
 async function fetchYahooChart(symbol, range) {
   const hosts = ["query1", "query2"];
   let lastStatus = 0;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    // Prime (or refresh, on a later attempt) the anti-bot session.
+    const session = await getYahooSession(attempt > 0);
+    const headers = { ...BROWSER_HEADERS };
+    if (session.cookie) headers.Cookie = session.cookie;
+
     for (const host of hosts) {
-      const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+      let url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
         symbol,
       )}?interval=1d&range=${encodeURIComponent(range)}`;
-      const res = await fetch(url, {
-        headers: { "User-Agent": UA, Accept: "application/json" },
-      });
+      if (session.crumb) url += `&crumb=${encodeURIComponent(session.crumb)}`;
+      const res = await fetch(url, { headers });
       if (res.ok) return parseYahooChart(symbol, await res.json());
       lastStatus = res.status;
-      if (res.status !== 429 && res.status < 500) break; // 404 etc. — don't retry
+      if (res.status !== 429 && res.status !== 401 && res.status < 500) break;
     }
-    await sleep(400 * (attempt + 1));
+    await sleep(500 * (attempt + 1));
   }
   throw new Error(`Market data unavailable (${lastStatus || "network"})`);
 }
@@ -188,10 +249,14 @@ export async function fetchFundamentals(ticker) {
     const symbol = normalizeSymbol(ticker);
     const modules =
       "defaultKeyStatistics,financialData,incomeStatementHistoryQuarterly";
-    const url = `${YAHOO_QUOTESUMMARY}/${encodeURIComponent(
+    const session = await getYahooSession();
+    const headers = { ...BROWSER_HEADERS };
+    if (session.cookie) headers.Cookie = session.cookie;
+    let url = `${YAHOO_QUOTESUMMARY}/${encodeURIComponent(
       symbol,
     )}?modules=${modules}`;
-    const res = await fetch(url, { headers: { "User-Agent": UA } });
+    if (session.crumb) url += `&crumb=${encodeURIComponent(session.crumb)}`;
+    const res = await fetch(url, { headers });
     if (!res.ok) return null;
     const data = await res.json();
     const r = data?.quoteSummary?.result?.[0];
