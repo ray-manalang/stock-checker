@@ -176,7 +176,7 @@ export function ProView() {
         </div>
         {refreshing.scanner && (
           <div className="insight-foot" style={{ paddingTop: 4 }}>
-            Rescanning… this can take a few minutes on the free data tier.
+            Rescanning… this can take a few minutes.
           </div>
         )}
         <div className="insight-divider" />

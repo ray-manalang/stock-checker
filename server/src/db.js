@@ -67,6 +67,15 @@ export function db() {
       created_at TEXT NOT NULL,
       triggered_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS llm_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL,
+      model TEXT NOT NULL,
+      input_tokens INTEGER DEFAULT 0,
+      output_tokens INTEGER DEFAULT 0,
+      cost REAL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
   `);
   return _db;
 }
@@ -187,6 +196,38 @@ export function saveAnalystScore({ ticker, quarterEnd, dimensions, fundamentalSc
       model ?? null,
       new Date().toISOString(),
     );
+}
+
+// ---------- LLM usage ----------
+export function recordUsage({ kind, model, inputTokens, outputTokens, cost }) {
+  db()
+    .prepare(
+      `INSERT INTO llm_usage (kind, model, input_tokens, output_tokens, cost, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    )
+    .run(kind, model, inputTokens ?? 0, outputTokens ?? 0, cost ?? 0, new Date().toISOString());
+}
+
+/** Cost + call/token totals for the current calendar month (UTC). */
+export function usageThisMonth() {
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  const row = db()
+    .prepare(
+      `SELECT COUNT(*) AS calls,
+              COALESCE(SUM(cost), 0) AS cost,
+              COALESCE(SUM(input_tokens), 0) AS input_tokens,
+              COALESCE(SUM(output_tokens), 0) AS output_tokens
+       FROM llm_usage WHERE created_at >= ?`,
+    )
+    .get(monthStart);
+  return {
+    calls: row.calls,
+    cost: Number(row.cost.toFixed(4)),
+    inputTokens: row.input_tokens,
+    outputTokens: row.output_tokens,
+    since: monthStart,
+  };
 }
 
 // ---------- price cache (24h) ----------

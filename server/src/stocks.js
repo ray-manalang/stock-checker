@@ -374,7 +374,11 @@ async function fetchTwelveDataMulti(symbols, range) {
       `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSym)}` +
       `&interval=1day&outputsize=${outputsize}&order=ASC&apikey=${encodeURIComponent(key)}`;
     try {
-      const res = await fetch(url, { headers: { "User-Agent": UA } });
+      // Per-request timeout so one stuck connection can't stall the whole run.
+      const res = await fetch(url, {
+        headers: { "User-Agent": UA },
+        signal: AbortSignal.timeout(15000),
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.status !== "error" && Array.isArray(data.values)) {

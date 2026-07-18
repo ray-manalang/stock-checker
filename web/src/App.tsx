@@ -5,6 +5,8 @@ import {
   addToWatchlist,
   removeFromWatchlist,
   createAlert,
+  getUsage,
+  type Usage,
 } from "./api";
 import type { CheckResponse, Tone, Word } from "./types";
 import { InfoTip } from "./components/InfoTip";
@@ -28,12 +30,22 @@ export default function App() {
   const [data, setData] = useState<CheckResponse | null>(null);
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [watchInput, setWatchInput] = useState("");
+  const [usage, setUsage] = useState<Usage | null>(null);
 
   useEffect(() => {
     getWatchlist()
       .then((w) => setWatchlist(w.map((x) => x.ticker)))
       .catch(() => {});
   }, []);
+
+  const refreshUsage = () => getUsage().then(setUsage).catch(() => {});
+  useEffect(() => {
+    refreshUsage();
+  }, []);
+  // Re-pull usage after a check (a deep-dive may have spent tokens).
+  useEffect(() => {
+    if (data) refreshUsage();
+  }, [data]);
 
   async function toggleWatch(sym: string) {
     const symbol = sym.toUpperCase();
@@ -93,7 +105,7 @@ export default function App() {
     <div className="page">
       <nav className="nav">
         <div className="brand">
-          Stock Checker<span className="dot">.</span>
+          Market Specialist<span className="dot">.</span>
         </div>
         <SegmentedControl
           value={mode}
@@ -224,6 +236,16 @@ export default function App() {
           onToggleWatch={() => toggleWatch(data.quote.ticker)}
           onCreateAlert={(price) => makeAlert(data.quote.ticker, price)}
         />
+      )}
+
+      {usage?.llm && (
+        <div
+          className="center muted"
+          style={{ marginTop: 40, fontSize: 12, color: "var(--text-3)" }}
+        >
+          Claude usage this month: ${usage.cost.toFixed(2)} · {usage.calls}{" "}
+          {usage.calls === 1 ? "call" : "calls"}
+        </div>
       )}
     </div>
   );

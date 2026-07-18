@@ -15,6 +15,7 @@ import {
   listAlerts,
   addAlert,
   removeAlert,
+  usageThisMonth,
 } from "./db.js";
 import {
   startScheduler,
@@ -55,6 +56,11 @@ app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, llm: llmConfigured() });
+});
+
+// Month-to-date Claude usage + cost.
+app.get("/api/usage", (_req, res) => {
+  res.json({ llm: llmConfigured(), ...usageThisMonth() });
 });
 
 async function runCheck(ticker, res, opts) {

@@ -39,6 +39,18 @@ export async function removeFromWatchlist(ticker: string): Promise<WatchItem[]> 
   ).data;
 }
 
+export type Usage = {
+  llm: boolean;
+  calls: number;
+  cost: number;
+  inputTokens: number;
+  outputTokens: number;
+};
+
+export async function getUsage(): Promise<Usage> {
+  return jsonOrThrow(await fetch("/api/usage"));
+}
+
 export async function refreshLayer(layer: "macro" | "scanner" | "analyst"): Promise<void> {
   await jsonOrThrow(await fetch(`/api/refresh/${layer}`, { method: "POST" }));
 }

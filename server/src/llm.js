@@ -7,6 +7,37 @@
 // breaks just because the key is missing.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { recordUsage } from "./db.js";
+
+// Price per 1M tokens (input, output). Cache reads bill ~0.1x input, cache
+// writes ~1.25x; the Batch API is 50% off.
+const PRICING = {
+  "claude-opus-4-8": { in: 5, out: 25 },
+  "claude-sonnet-4-6": { in: 3, out: 15 },
+};
+
+function costOf(model, usage, { batch = false } = {}) {
+  const p = PRICING[model] ?? PRICING["claude-opus-4-8"];
+  const u = usage ?? {};
+  const inTok = u.input_tokens ?? 0;
+  const cacheWrite = u.cache_creation_input_tokens ?? 0;
+  const cacheRead = u.cache_read_input_tokens ?? 0;
+  const outTok = u.output_tokens ?? 0;
+  let cost =
+    (inTok * p.in + cacheWrite * p.in * 1.25 + cacheRead * p.in * 0.1 + outTok * p.out) /
+    1e6;
+  if (batch) cost *= 0.5;
+  return { cost, inputTokens: inTok + cacheWrite + cacheRead, outputTokens: outTok };
+}
+
+function logUsage(kind, model, usage, opts) {
+  try {
+    const c = costOf(model, usage, opts);
+    recordUsage({ kind, model, inputTokens: c.inputTokens, outputTokens: c.outputTokens, cost: c.cost });
+  } catch {
+    /* never let accounting break a request */
+  }
+}
 
 export class LlmUnavailable extends Error {
   constructor(message) {
@@ -102,6 +133,7 @@ export async function deepDiveTicker({ quote, indicators, fundamentals }) {
       "Ground every claim in the numbers given. Keep bull/bear points to plain, concrete sentences.",
     messages: [{ role: "user", content: prompt }],
   });
+  logUsage("deep_dive", OPUS, res.usage);
 
   const text = res.content.find((b) => b.type === "text")?.text;
   if (!text) throw new Error("Claude returned no structured output");
@@ -260,6 +292,7 @@ export async function scoreFundamentals({ ticker, fundamentals }) {
     output_config: { format: { type: "json_schema", schema: ANALYST_SCHEMA } },
     messages: [{ role: "user", content: analystPrompt({ ticker, fundamentals }) }],
   });
+  logUsage("analyst", SONNET, res.usage);
   const text = res.content.find((b) => b.type === "text")?.text;
   return clampAnalyst(JSON.parse(text));
 }
@@ -295,6 +328,7 @@ export async function scoreFundamentalsBatch(items) {
   const out = {};
   for await (const result of await c.messages.batches.results(batch.id)) {
     if (result.result.type !== "succeeded") continue;
+    logUsage("analyst_batch", SONNET, result.result.message.usage, { batch: true });
     const text = result.result.message.content.find((b) => b.type === "text")?.text;
     if (!text) continue;
     try {

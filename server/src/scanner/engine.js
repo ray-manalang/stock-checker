@@ -15,8 +15,9 @@ import { saveScanner, freshSeriesMap, setCachedSeries } from "../db.js";
 
 const PRICE_TTL_MS = 24 * 60 * 60 * 1000;
 // Cap the scanned universe to fit the data provider's free tier (Twelve Data:
-// 800 credits/day, 8/min). Override with SCANNER_UNIVERSE_SIZE.
-const UNIVERSE_SIZE = Number(process.env.SCANNER_UNIVERSE_SIZE) || 100;
+// 800 credits/day, 8/min → ~8s per symbol). 50 names ≈ a ~7-minute first run,
+// then cached 24h. Override with SCANNER_UNIVERSE_SIZE.
+const UNIVERSE_SIZE = Number(process.env.SCANNER_UNIVERSE_SIZE) || 50;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = path.join(__dirname, "..", "..", ".cache");
