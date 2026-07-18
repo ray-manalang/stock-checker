@@ -6,7 +6,9 @@ import {
   removeFromWatchlist,
   createAlert,
   getUsage,
+  getRecentChecks,
   type Usage,
+  type RecentCheck,
 } from "./api";
 import type { CheckResponse, Tone, Word } from "./types";
 import { InfoTip } from "./components/InfoTip";
@@ -31,11 +33,14 @@ export default function App() {
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [watchInput, setWatchInput] = useState("");
   const [usage, setUsage] = useState<Usage | null>(null);
+  const [recent, setRecent] = useState<RecentCheck[]>([]);
 
+  const refreshRecent = () => getRecentChecks().then(setRecent).catch(() => {});
   useEffect(() => {
     getWatchlist()
       .then((w) => setWatchlist(w.map((x) => x.ticker)))
       .catch(() => {});
+    refreshRecent();
   }, []);
 
   const refreshUsage = () => getUsage().then(setUsage).catch(() => {});
@@ -88,6 +93,7 @@ export default function App() {
       const res = await checkTicker(symbol, opts);
       setData(res);
       setTicker(symbol);
+      refreshRecent();
     } catch (err) {
       setData(null);
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -157,6 +163,35 @@ export default function App() {
           </button>
         ))}
       </div>
+
+      {recent.length > 0 && (
+        <div className="chips" style={{ marginTop: -12, alignItems: "center" }}>
+          <span className="muted" style={{ fontSize: 13, alignSelf: "center" }}>
+            Recently checked:
+          </span>
+          {recent.map((r) => (
+            <button
+              key={r.ticker}
+              className="chip"
+              onClick={() => run(r.ticker)}
+              disabled={loading}
+              title={r.verdictLabel ?? ""}
+              style={{ display: "inline-flex", alignItems: "center", gap: 7 }}
+            >
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: `var(--${r.verdictTone ?? "neutral"}, var(--text-3))`,
+                  display: "inline-block",
+                }}
+              />
+              {r.ticker}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="chips" style={{ marginTop: -12, alignItems: "center" }}>
         <span className="star" style={{ color: "var(--star)", alignSelf: "center", fontSize: 13 }}>

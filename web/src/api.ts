@@ -39,6 +39,20 @@ export async function removeFromWatchlist(ticker: string): Promise<WatchItem[]> 
   ).data;
 }
 
+export type RecentCheck = {
+  ticker: string;
+  name: string | null;
+  verdictLabel: string | null;
+  verdictTone: string | null;
+  price: number | null;
+  llm: boolean;
+  checkedAt: string;
+};
+
+export async function getRecentChecks(): Promise<RecentCheck[]> {
+  return (await jsonOrThrow(await fetch("/api/checks"))).data;
+}
+
 export type Usage = {
   llm: boolean;
   calls: number;

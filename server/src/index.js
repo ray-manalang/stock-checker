@@ -17,6 +17,8 @@ import {
   removeAlert,
   usageThisMonth,
   getCachedSeries,
+  recordCheck,
+  recentChecks,
 } from "./db.js";
 import {
   startScheduler,
@@ -71,12 +73,24 @@ async function runCheck(ticker, res, opts) {
   }
   try {
     const result = await analyzeTicker(ticker, opts);
+    recordCheck({
+      ticker: result.quote.ticker,
+      name: result.quote.name,
+      verdictLabel: result.verdict.label,
+      verdictTone: result.verdict.tone,
+      price: result.quote.price,
+      llm: result.llm,
+    });
     res.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Analysis failed";
     res.status(500).json({ error: message });
   }
 }
+
+// Persisted history of checked stocks (survives reloads). Revisiting one
+// re-opens instantly from the quarter cache — no new Claude call.
+app.get("/api/checks", (_req, res) => res.json({ data: recentChecks() }));
 
 // Instant Check: live price + technicals + deterministic verdict, with a
 // cached/live Claude deep-dive when available. `?deep=0` skips the LLM;

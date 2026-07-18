@@ -67,6 +67,15 @@ export function db() {
       created_at TEXT NOT NULL,
       triggered_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS recent_checks (
+      ticker TEXT PRIMARY KEY,
+      name TEXT,
+      verdict_label TEXT,
+      verdict_tone TEXT,
+      price REAL,
+      llm INTEGER DEFAULT 0,
+      checked_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS llm_usage (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       kind TEXT NOT NULL,
@@ -196,6 +205,32 @@ export function saveAnalystScore({ ticker, quarterEnd, dimensions, fundamentalSc
       model ?? null,
       new Date().toISOString(),
     );
+}
+
+// ---------- recent checks ----------
+export function recordCheck({ ticker, name, verdictLabel, verdictTone, price, llm }) {
+  db()
+    .prepare(
+      `INSERT OR REPLACE INTO recent_checks
+         (ticker, name, verdict_label, verdict_tone, price, llm, checked_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(ticker, name ?? null, verdictLabel ?? null, verdictTone ?? null, price ?? null, llm ? 1 : 0, new Date().toISOString());
+}
+
+export function recentChecks(limit = 12) {
+  return db()
+    .prepare(`SELECT * FROM recent_checks ORDER BY checked_at DESC LIMIT ?`)
+    .all(limit)
+    .map((r) => ({
+      ticker: r.ticker,
+      name: r.name,
+      verdictLabel: r.verdict_label,
+      verdictTone: r.verdict_tone,
+      price: r.price,
+      llm: !!r.llm,
+      checkedAt: r.checked_at,
+    }));
 }
 
 // ---------- LLM usage ----------
