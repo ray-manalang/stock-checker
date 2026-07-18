@@ -121,7 +121,20 @@ export default function App() {
           disabled={loading}
         />
         <button className="btn-primary" disabled={loading || !ticker.trim()}>
-          {loading ? "…" : "Check"}
+          {loading ? (
+            <span
+              className="spinner"
+              style={{
+                width: 15,
+                height: 15,
+                borderColor: "rgba(0,0,0,0.25)",
+                borderTopColor: "#000",
+                verticalAlign: "-2px",
+              }}
+            />
+          ) : (
+            "Check"
+          )}
         </button>
       </form>
 
