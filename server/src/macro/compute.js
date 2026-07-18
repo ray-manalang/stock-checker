@@ -1,4 +1,4 @@
-import { fetchCloses, fetchChart } from "../stocks.js";
+import { fetchSparkCloses } from "../stocks.js";
 import { sma } from "../indicators.js";
 import {
   vixLevel,
@@ -60,28 +60,35 @@ export async function computeMacro({ breadthOverride = null } = {}) {
     return persist(fixtureMacro());
   }
 
-  // VIX family (also feeds put/call).
-  const vix = await safe(() => fetchCloses("^VIX", "1y"), null);
-  const vix3m = await safe(() => fetchCloses("^VIX3M", "1y"), null);
+  // One batched spark request for the VIX family + factor ETFs (+ the breadth
+  // sample when the scanner hasn't supplied breadth).
+  const needBreadth = breadthOverride == null;
+  const symbols = ["^VIX", "^VIX3M", ...FACTOR_ETFS];
+  if (needBreadth) symbols.push(...BREADTH_SAMPLE);
+  const spark = await safe(() => fetchSparkCloses(symbols, "1y"), {});
+  const closesOf = (s) => spark[s]?.closes ?? null;
 
-  // Credit spreads via FRED HY OAS.
+  const vix = closesOf("^VIX");
+  const vix3m = closesOf("^VIX3M");
+
+  // Credit spreads via FRED HY OAS (independent of Yahoo).
   const oas = await safe(() => fetchFredSeries(FRED_HY_OAS), null);
 
   // Factor ETF dispersion (60-day returns).
   const factorReturns = [];
   for (const etf of FACTOR_ETFS) {
-    const closes = await safe(() => fetchCloses(etf, "1y"), null);
+    const closes = closesOf(etf);
     const r = closes ? trailingReturnPct(closes, 60) : null;
     if (r != null) factorReturns.push(r);
   }
 
   // Market breadth: fraction of the sample above its 200-DMA.
   let breadth = breadthOverride;
-  if (breadth == null) {
+  if (needBreadth) {
     let above = 0;
     let total = 0;
     for (const t of BREADTH_SAMPLE) {
-      const closes = await safe(() => fetchCloses(t, "1y"), null);
+      const closes = closesOf(t);
       if (!closes || closes.length < 200) continue;
       const ma = sma(closes, 200);
       total += 1;

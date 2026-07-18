@@ -189,6 +189,43 @@ export function saveAnalystScore({ ticker, quarterEnd, dimensions, fundamentalSc
     );
 }
 
+// ---------- price cache (24h) ----------
+export function getCachedSeries(ticker) {
+  const row = db()
+    .prepare(`SELECT series_json, fetched_at FROM price_cache WHERE ticker = ?`)
+    .get(ticker);
+  if (!row) return null;
+  return { ...JSON.parse(row.series_json), fetchedAt: row.fetched_at };
+}
+
+export function setCachedSeries(ticker, series) {
+  db()
+    .prepare(
+      `INSERT OR REPLACE INTO price_cache (ticker, series_json, fetched_at)
+       VALUES (?, ?, ?)`,
+    )
+    .run(ticker, JSON.stringify(series), new Date().toISOString());
+}
+
+/** Split tickers into cached-and-fresh (< ttl) vs. stale/missing (need fetch). */
+export function freshSeriesMap(tickers, ttlMs) {
+  const now = Date.now();
+  const fresh = {};
+  const stale = [];
+  const get = db().prepare(
+    `SELECT series_json, fetched_at FROM price_cache WHERE ticker = ?`,
+  );
+  for (const t of tickers) {
+    const row = get.get(t);
+    if (row && now - new Date(row.fetched_at).getTime() < ttlMs) {
+      fresh[t] = JSON.parse(row.series_json);
+    } else {
+      stale.push(t);
+    }
+  }
+  return { fresh, stale };
+}
+
 // ---------- watchlist ----------
 export function listWatchlist() {
   return db()

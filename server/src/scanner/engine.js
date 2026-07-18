@@ -1,17 +1,18 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { fetchChart, fetchFundamentals } from "../stocks.js";
+import { fetchFundamentals, fetchSparkCloses } from "../stocks.js";
 import { sma } from "../indicators.js";
 import {
   momentumFactor,
-  volumeFactor,
   relStrengthFactor,
   high52Factor,
   shortInterestFactor,
   buildComposite,
 } from "./factors.js";
-import { saveScanner } from "../db.js";
+import { saveScanner, freshSeriesMap, setCachedSeries } from "../db.js";
+
+const PRICE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = path.join(__dirname, "..", "..", ".cache");
@@ -76,28 +77,25 @@ async function scrapeSp500() {
   return [...new Set(tickers)];
 }
 
-// Fetch OHLCV for a list of tickers, throttled in small concurrent batches.
-async function fetchUniverseOhlcv(tickers, { batchSize = 5, delayMs = 300 } = {}) {
-  const closesMap = {};
-  const volumesMap = {};
-  for (let i = 0; i < tickers.length; i += batchSize) {
-    const batch = tickers.slice(i, i + batchSize);
-    await Promise.all(
-      batch.map(async (t) => {
-        try {
-          const { series } = await fetchChart(t, "1y");
-          if (series.close.length >= 200) {
-            closesMap[t] = series.close;
-            volumesMap[t] = series.volume;
-          }
-        } catch {
-          /* skip this ticker */
-        }
-      }),
-    );
-    if (i + batchSize < tickers.length) await sleep(delayMs);
+// Batched close series for the whole universe, served from the 24h price cache
+// where possible and back-filled with Yahoo spark (one request per ~50 symbols).
+// Spark is close-only, so the volume-surge factor is unavailable in this path.
+async function fetchUniverseCloses(tickers) {
+  const { fresh, stale } = freshSeriesMap(tickers, PRICE_TTL_MS);
+  if (stale.length) {
+    const fetched = await fetchSparkCloses(stale, "1y");
+    for (const [t, series] of Object.entries(fetched)) {
+      setCachedSeries(t, series);
+      fresh[t] = series;
+    }
   }
-  return { closesMap, volumesMap };
+  const closesMap = {};
+  for (const [t, series] of Object.entries(fresh)) {
+    if (Array.isArray(series?.closes) && series.closes.length >= 200) {
+      closesMap[t] = series.closes;
+    }
+  }
+  return closesMap;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -105,7 +103,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /**
  * Run the L2 scanner. Respects the macro gate: DEFENSIVE returns empty (scanner
  * off), REDUCED filters to composite >= 75, OFFENSIVE returns the full ranking.
- * Returns { rows, macroMode, breadth }.
+ * Uses batched spark closes + 24h cache. Returns { rows, macroMode, breadth }.
  */
 export async function runScanner({ macroMode = "OFFENSIVE", top = 100 } = {}) {
   if (macroMode === "DEFENSIVE") {
@@ -120,14 +118,11 @@ export async function runScanner({ macroMode = "OFFENSIVE", top = 100 } = {}) {
   }
 
   const universe = await getUniverse();
-  const { closesMap, volumesMap } = await fetchUniverseOhlcv(universe);
-  let spyCloses = null;
-  try {
-    const { series } = await fetchChart("SPY", "1y");
-    spyCloses = series.close;
-  } catch {
-    spyCloses = null;
-  }
+  // SPY rides along in the same batched fetch (needed for relative strength).
+  const withSpy = universe.includes("SPY") ? universe : [...universe, "SPY"];
+  const closesMap = await fetchUniverseCloses(withSpy);
+  const spyCloses = closesMap.SPY ?? null;
+  delete closesMap.SPY;
 
   const tickers = Object.keys(closesMap);
   if (!tickers.length) {
@@ -145,9 +140,10 @@ export async function runScanner({ macroMode = "OFFENSIVE", top = 100 } = {}) {
     }
   }
 
+  // Close-only factors (spark carries no volume, so volume-surge is omitted;
+  // the composite averages the factors that are present).
   const factorMaps = {
     momentum: momentumFactor(closesMap),
-    volume_surge: volumeFactor(volumesMap),
     rel_strength: relStrengthFactor(closesMap, spyCloses),
     high_52wk_prox: high52Factor(closesMap),
   };

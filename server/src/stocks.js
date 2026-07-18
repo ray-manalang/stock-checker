@@ -326,6 +326,63 @@ export async function fetchCloses(ticker, range = "1y") {
 }
 
 /**
+ * Parse Yahoo's multi-symbol spark response into { symbol: { closes, timestamp } }.
+ * Pure — unit-tested against a fixture. Spark is close-only (no volume/OHLC).
+ */
+export function parseSpark(json) {
+  const out = {};
+  for (const r of json?.spark?.result ?? []) {
+    const resp = r?.response?.[0];
+    const close = resp?.indicators?.quote?.[0]?.close;
+    const ts = resp?.timestamp;
+    if (!Array.isArray(close) || !Array.isArray(ts)) continue;
+    const closes = [];
+    const timestamp = [];
+    for (let i = 0; i < close.length; i++) {
+      const c = close[i];
+      if (typeof c === "number" && !Number.isNaN(c)) {
+        closes.push(c);
+        timestamp.push(ts[i]);
+      }
+    }
+    if (closes.length) out[r.symbol] = { closes, timestamp };
+  }
+  return out;
+}
+
+/**
+ * Batched close series for many symbols via Yahoo's spark endpoint — one HTTP
+ * request per ~chunkSize symbols instead of one per symbol. This is what makes
+ * the macro gate and scanner viable without tripping Yahoo's per-request
+ * rate-limiter. Returns { symbol: { closes, timestamp } }; symbols that fail are
+ * simply absent (callers degrade).
+ */
+export async function fetchSparkCloses(symbols, range = "1y", { chunkSize = 50 } = {}) {
+  const out = {};
+  for (let i = 0; i < symbols.length; i += chunkSize) {
+    const chunk = symbols.slice(i, i + chunkSize);
+    const session = await getYahooSession(i > 0 && Object.keys(out).length === 0);
+    const headers = { ...BROWSER_HEADERS };
+    if (session.cookie) headers.Cookie = session.cookie;
+    for (const host of ["query1", "query2"]) {
+      let url =
+        `https://${host}.finance.yahoo.com/v8/finance/spark?symbols=` +
+        `${chunk.map((s) => encodeURIComponent(s)).join(",")}` +
+        `&range=${encodeURIComponent(range)}&interval=1d`;
+      if (session.crumb) url += `&crumb=${encodeURIComponent(session.crumb)}`;
+      const res = await fetch(url, { headers });
+      if (res.ok) {
+        Object.assign(out, parseSpark(await res.json()));
+        break;
+      }
+      if (res.status !== 429 && res.status !== 401 && res.status < 500) break;
+    }
+    if (i + chunkSize < symbols.length) await sleep(300);
+  }
+  return out;
+}
+
+/**
  * Fundamentals + short interest via quoteSummary. FRAGILE (may need a
  * crumb/cookie, rate-limits, changes shape). Never throws — returns null on
  * failure so callers can skip/re-weight rather than error.
