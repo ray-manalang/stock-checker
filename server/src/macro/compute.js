@@ -81,18 +81,18 @@ export async function computeMacro({ breadthOverride = null } = {}) {
     return persist(fixtureMacro());
   }
 
-  // VIX from FRED (VIXCLS) — reachable where Yahoo's ^VIX is not. VIX3M has no
-  // free source, so the term-structure signal degrades and the composite
-  // re-weights over the remaining five.
-  const vix = await safe(() => fetchFredSeries(FRED_VIX), null);
-  const vix3m = null;
-
-  // Factor ETFs (+ breadth sample) via the cached provider-agnostic fetch.
+  // VIX family + factor ETFs (+ breadth sample) via the cached fetch. When the
+  // Yahoo sidecar is available this pulls real ^VIX/^VIX3M (restoring term
+  // structure); otherwise VIX falls back to FRED and term structure degrades.
   const needBreadth = breadthOverride == null;
-  const priceSymbols = [...FACTOR_ETFS];
+  const priceSymbols = ["^VIX", "^VIX3M", ...FACTOR_ETFS];
   if (needBreadth) priceSymbols.push(...BREADTH_SAMPLE);
   const closes = await safe(() => cachedCloses(priceSymbols), {});
   const closesOf = (s) => closes[s] ?? null;
+
+  let vix = closesOf("^VIX");
+  if (!vix) vix = await safe(() => fetchFredSeries(FRED_VIX), null);
+  const vix3m = closesOf("^VIX3M");
 
   // Credit spreads via FRED HY OAS (independent of Yahoo).
   const oas = await safe(() => fetchFredSeries(FRED_HY_OAS), null);

@@ -2,6 +2,39 @@
 // The chart endpoint returns a full range of daily OHLCV — we keep the whole
 // series so every technical indicator downstream is free.
 
+import path from "path";
+import { fileURLToPath } from "url";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileP = promisify(execFile);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Yahoo blocks by TLS fingerprint, so Node's fetch is 429'd. We shell out to a
+// small Python sidecar (yfinance/curl_cffi, which impersonates a browser TLS
+// handshake) for real Yahoo data. Point YF_PYTHON at a python that has yfinance
+// installed (default: python3); set YF_DISABLE=1 to skip it entirely.
+const YF_PYTHON = process.env.YF_PYTHON?.trim() || "python3";
+const YF_SCRIPT = path.join(__dirname, "..", "scripts", "yf_fetch.py");
+let _yfState = null; // null unknown · true available · false unavailable
+
+function yfEnabled() {
+  return process.env.YF_DISABLE !== "1" && _yfState !== false;
+}
+function markYfError(err) {
+  const msg = `${err?.code ?? ""} ${err?.stderr ?? err?.message ?? ""}`;
+  // Missing python or yfinance → stop trying the sidecar this process.
+  if (/ENOENT|No module named|ModuleNotFoundError/i.test(msg)) _yfState = false;
+}
+async function runYf(args, timeoutMs = 60000) {
+  const { stdout } = await execFileP(YF_PYTHON, [YF_SCRIPT, ...args], {
+    timeout: timeoutMs,
+    maxBuffer: 96 * 1024 * 1024,
+  });
+  _yfState = true;
+  return JSON.parse(stdout);
+}
+
 const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart";
 const YAHOO_QUOTESUMMARY =
   "https://query1.finance.yahoo.com/v10/finance/quoteSummary";
@@ -95,8 +128,17 @@ export async function fetchChart(ticker, range = "1y") {
     return fixtureChart(symbol, range);
   }
 
-  // Preferred: a keyed provider with a real free tier (Yahoo hard-429s many
-  // networks). Twelve Data first when configured.
+  // Preferred: Yahoo via the yfinance sidecar (free, full history, no rate cap).
+  if (yfEnabled()) {
+    try {
+      const r = await runYf(["chart", symbol, range]);
+      if (r?.quote?.price) return r;
+    } catch (err) {
+      markYfError(err);
+    }
+  }
+
+  // Then a keyed provider with a free tier (Twelve Data).
   if (process.env.TWELVE_DATA_API_KEY?.trim()) {
     try {
       return await fetchTwelveDataChart(symbol, range);
@@ -357,6 +399,15 @@ export function parseSpark(json) {
  * { symbol: { closes, volumes?, timestamp } }; failed symbols are simply absent.
  */
 export async function fetchSeriesMulti(symbols, range = "1y") {
+  // Yahoo via the sidecar batches hundreds of symbols in one fast call.
+  if (yfEnabled()) {
+    try {
+      const r = await runYf(["multi", range, ...symbols]);
+      if (r && Object.keys(r).length) return r;
+    } catch (err) {
+      markYfError(err);
+    }
+  }
   if (process.env.TWELVE_DATA_API_KEY?.trim()) {
     return fetchTwelveDataMulti(symbols, range);
   }

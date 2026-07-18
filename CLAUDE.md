@@ -28,8 +28,14 @@ Scheduled jobs (`server/src/scheduler.js`, node-cron) write snapshots to SQLite
 (`server/src/db.js`, better-sqlite3); read endpoints serve the latest instantly
 with an `{ data, asOf, stale }` envelope. Every layer degrades gracefully.
 
+- **Data sources** (`stocks.js`): Yahoo via a Python sidecar
+  (`scripts/yf_fetch.py`, yfinance/curl_cffi — impersonates a browser TLS
+  fingerprint, since Yahoo 429s plain Node/requests) is primary and batches the
+  whole universe in one fast call. Falls back to Twelve Data (keyed) → Yahoo
+  spark → Stooq → fixtures. Point `YF_PYTHON` at a python with yfinance
+  installed (`pip install -r server/scripts/requirements.txt`).
 - **Simple Check** (`GET /api/check/:sym`) → `analyze.js`: live price + OHLCV
-  series (`stocks.js`, Yahoo→Stooq→fixtures fallback) → technicals
+  series → technicals
   (`indicators.js`) → beginner-language glance + deterministic verdict
   (`language.js`, `verdict.js`) → optional Claude deep-dive (`llm.js`, Opus 4.8,
   structured output). Deep-dive is cached by quarter (`analyst/analyzer.js`);

@@ -1,0 +1,7 @@
+# Python sidecar for Yahoo Finance data (yf_fetch.py).
+# yfinance uses curl_cffi to impersonate a browser TLS fingerprint, which is
+# what Yahoo's bot-detection checks — plain Node/requests get 429'd.
+#
+# Install into the python that Node calls (see YF_PYTHON in .env.example):
+#   pip install -r server/scripts/requirements.txt
+yfinance>=0.2.40
