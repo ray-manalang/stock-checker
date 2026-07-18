@@ -5,3 +5,9 @@ server/.env
 .tmp-asutility/
 *.log
 .DS_Store
+
+# local database
+*.db
+*.db-wal
+*.db-shm
+.cache/

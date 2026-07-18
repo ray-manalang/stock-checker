@@ -4,6 +4,44 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { analyzeTicker } from "./analyze.js";
+import { llmConfigured } from "./llm.js";
+import {
+  latestMacro,
+  latestScanner,
+  latestFundamentalScores,
+  listWatchlist,
+  addWatchlist,
+  removeWatchlist,
+  listAlerts,
+  addAlert,
+  removeAlert,
+} from "./db.js";
+import {
+  startScheduler,
+  runMacro,
+  runScannerJob,
+  runAnalystJob,
+} from "./scheduler.js";
+import { blend } from "./analyst/blender.js";
+
+function normSym(s) {
+  return String(s ?? "").trim().toUpperCase().replace(/\./g, "-");
+}
+
+function numOrNull(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+// age in ms beyond which a snapshot is flagged stale
+const MACRO_STALE_MS = 45 * 60 * 1000;
+const SCANNER_STALE_MS = 36 * 60 * 60 * 1000;
+
+function envelope(row, staleMs) {
+  if (!row) return { data: null, asOf: null, stale: true };
+  const age = Date.now() - new Date(row.computedAt).getTime();
+  return { asOf: row.computedAt, stale: age > staleMs };
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -16,25 +54,142 @@ app.use(cors({ origin: process.env.CORS_ORIGIN ?? true }));
 app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
-    llm: Boolean(process.env.GEMINI_API_KEY?.trim()),
-  });
+  res.json({ ok: true, llm: llmConfigured() });
 });
 
-app.post("/api/analyze", async (req, res) => {
-  const ticker = req.body?.ticker;
+async function runCheck(ticker, res, opts) {
   if (!ticker || typeof ticker !== "string") {
     return res.status(400).json({ error: "ticker is required" });
   }
-
   try {
-    const result = await analyzeTicker(ticker);
+    const result = await analyzeTicker(ticker, opts);
     res.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Analysis failed";
     res.status(500).json({ error: message });
   }
+}
+
+// Instant Check: live price + technicals + deterministic verdict, with a
+// cached/live Claude deep-dive when available. `?deep=0` skips the LLM;
+// `?fresh=1` forces a live Opus deep-dive even if the quarter cache has one.
+app.get("/api/check/:sym", (req, res) => {
+  const deep = req.query.deep !== "0" && req.query.deep !== "false";
+  const fresh = req.query.fresh === "1" || req.query.fresh === "true";
+  return runCheck(req.params.sym, res, { deep, fresh });
+});
+
+// Back-compat: original POST endpoint.
+app.post("/api/analyze", (req, res) => runCheck(req.body?.ticker, res, {}));
+
+// L1 macro gate — reads the latest cached snapshot instantly.
+app.get("/api/macro", (_req, res) => {
+  const row = latestMacro();
+  const env = envelope(row, MACRO_STALE_MS);
+  if (!row) return res.status(200).json(env);
+  res.json({
+    ...env,
+    data: {
+      composite: row.composite,
+      zone: row.zone,
+      sizingPct: row.meta?.sizingPct ?? null,
+      scannerActive: row.meta?.scannerActive ?? false,
+      scannerMode: row.meta?.scannerMode ?? null,
+      oneLiner: row.meta?.oneLiner ?? "",
+      signals: row.signals,
+    },
+  });
+});
+
+// L2 scanner — reads the latest nightly ranking; gated OFF when DEFENSIVE.
+// When cached L3 analyst scores exist, blends them in (60/40) and flags
+// upgrades/downgrades.
+app.get("/api/scanner", (_req, res) => {
+  const run = latestScanner();
+  if (!run) return res.status(200).json({ data: null, asOf: null, stale: true });
+  const age = Date.now() - new Date(run.computedAt).getTime();
+
+  let rows = run.rows;
+  let blended = false;
+  const funds = latestFundamentalScores(run.rows.map((r) => r.ticker));
+  if (Object.keys(funds).length) {
+    const merged = blend(
+      run.rows.map((r) => ({ ...r, quant: r.composite, fundamental: funds[r.ticker] ?? null })),
+    );
+    rows = merged.map((r) => ({
+      ticker: r.ticker,
+      composite: r.composite,
+      rank: r.blendedRank,
+      quantRank: r.quantRank,
+      blendedScore: r.blendedScore,
+      rankFlag: r.rankFlag,
+      fundamental: r.fundamental,
+      factors: r.factors,
+    }));
+    blended = true;
+  }
+
+  res.json({
+    asOf: run.computedAt,
+    stale: age > SCANNER_STALE_MS,
+    macroMode: run.macroMode,
+    scannerActive: run.macroMode !== "DEFENSIVE",
+    blended,
+    data: rows,
+  });
+});
+
+// ---------- watchlist ----------
+app.get("/api/watchlist", (_req, res) => res.json({ data: listWatchlist() }));
+
+app.post("/api/watchlist", (req, res) => {
+  const ticker = normSym(req.body?.ticker);
+  if (!ticker) return res.status(400).json({ error: "ticker is required" });
+  addWatchlist(ticker);
+  res.json({ ok: true, data: listWatchlist() });
+});
+
+app.delete("/api/watchlist/:sym", (req, res) => {
+  removeWatchlist(normSym(req.params.sym));
+  res.json({ ok: true, data: listWatchlist() });
+});
+
+// ---------- alerts (buy-zone) ----------
+app.get("/api/alerts", (_req, res) => res.json({ data: listAlerts() }));
+
+app.post("/api/alerts", (req, res) => {
+  const ticker = normSym(req.body?.ticker);
+  const targetLow = numOrNull(req.body?.targetLow);
+  const targetHigh = numOrNull(req.body?.targetHigh);
+  if (!ticker) return res.status(400).json({ error: "ticker is required" });
+  if (targetLow == null && targetHigh == null) {
+    return res.status(400).json({ error: "a target price is required" });
+  }
+  const alert = addAlert({ ticker, targetLow, targetHigh });
+  res.json({ ok: true, alert, data: listAlerts() });
+});
+
+app.delete("/api/alerts/:id", (req, res) => {
+  removeAlert(Number(req.params.id));
+  res.json({ ok: true, data: listAlerts() });
+});
+
+// Kick a background recompute; returns immediately.
+app.post("/api/refresh/:layer", (req, res) => {
+  const layer = req.params.layer;
+  if (layer === "macro") {
+    runMacro();
+    return res.json({ ok: true, layer, started: true });
+  }
+  if (layer === "scanner") {
+    runScannerJob();
+    return res.json({ ok: true, layer, started: true });
+  }
+  if (layer === "analyst") {
+    runAnalystJob();
+    return res.json({ ok: true, layer, started: true });
+  }
+  res.status(404).json({ error: `unknown layer "${layer}"` });
 });
 
 if (staticDir) {
@@ -50,4 +205,5 @@ app.listen(port, "0.0.0.0", () => {
       ? `Stock Checker listening on http://0.0.0.0:${port} (UI + API)`
       : `API listening on http://0.0.0.0:${port}`,
   );
+  startScheduler();
 });

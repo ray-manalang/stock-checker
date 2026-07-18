@@ -1,67 +1,99 @@
-import { FormEvent, useState } from "react";
-import { analyzeTicker } from "./api";
-import type { AnalyzeResponse } from "./types";
-import "./App.css";
+import { FormEvent, useEffect, useState } from "react";
+import {
+  checkTicker,
+  getWatchlist,
+  addToWatchlist,
+  removeFromWatchlist,
+  createAlert,
+} from "./api";
+import type { CheckResponse, Tone, Word } from "./types";
+import { InfoTip } from "./components/InfoTip";
+import { PriceChart } from "./components/PriceChart";
+import { SegmentedControl } from "./components/SegmentedControl";
+import { ProView } from "./ProView";
+import { GLOSSARY } from "./lib/glossary";
+import { money, num, pct } from "./lib/format";
 
-function formatMoney(value: number | null, currency: string) {
-  if (value == null) return "—";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2,
-  }).format(value);
-}
+const RECENTS = ["AAPL", "MSFT", "NVDA", "TSLA", "GOOGL", "AMZN"];
 
-function signalClass(signal: string | null) {
-  if (!signal) return "signal";
-  const s = signal.toUpperCase();
-  if (s.includes("BUY")) return "signal signal-buy";
-  if (s.includes("SELL")) return "signal signal-sell";
-  return "signal signal-hold";
+function toneClass(t: Tone): string {
+  return t;
 }
 
 export default function App() {
+  const [mode, setMode] = useState<"simple" | "pro">("simple");
   const [ticker, setTicker] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AnalyzeResponse | null>(null);
+  const [data, setData] = useState<CheckResponse | null>(null);
+  const [watchlist, setWatchlist] = useState<string[]>([]);
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    const symbol = ticker.trim().toUpperCase();
+  useEffect(() => {
+    getWatchlist()
+      .then((w) => setWatchlist(w.map((x) => x.ticker)))
+      .catch(() => {});
+  }, []);
+
+  async function toggleWatch(sym: string) {
+    const symbol = sym.toUpperCase();
+    try {
+      const next = watchlist.includes(symbol)
+        ? await removeFromWatchlist(symbol)
+        : await addToWatchlist(symbol);
+      setWatchlist(next.map((x) => x.ticker));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function makeAlert(sym: string, price: number) {
+    try {
+      await createAlert(sym.toUpperCase(), price);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function run(sym: string, opts: { fresh?: boolean } = {}) {
+    const symbol = sym.trim().toUpperCase();
     if (!symbol) return;
-
     setLoading(true);
     setError(null);
-
     try {
-      const data = await analyzeTicker(symbol);
-      setResult(data);
+      const res = await checkTicker(symbol, opts);
+      setData(res);
       setTicker(symbol);
     } catch (err) {
-      setResult(null);
+      setData(null);
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
   }
 
-  const { quote, analysis } = result ?? {};
-  const rangePct =
-    quote?.price != null && quote.low52 != null && quote.high52 != null && quote.high52 > quote.low52
-      ? ((quote.price - quote.low52) / (quote.high52 - quote.low52)) * 100
-      : null;
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    run(ticker);
+  }
 
   return (
     <div className="page">
-      <header className="hero">
-        <p className="eyebrow">Personal equity brief</p>
-        <h1>Stock Checker</h1>
-        <p className="lede">
-          Enter a ticker for live quotes and a structured AI outlook. Free Yahoo Finance data and
-          Gemini analysis.
-        </p>
-      </header>
+      <nav className="nav">
+        <div className="brand">
+          Stock Checker<span className="dot">.</span>
+        </div>
+        <SegmentedControl
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "simple", label: "Simple" },
+            { value: "pro", label: "Pro" },
+          ]}
+        />
+      </nav>
+
+      {mode === "pro" && <ProView />}
 
       <form className="search" onSubmit={onSubmit}>
         <label htmlFor="ticker" className="sr-only">
@@ -69,19 +101,50 @@ export default function App() {
         </label>
         <input
           id="ticker"
-          name="ticker"
-          type="text"
-          placeholder="AAPL"
           value={ticker}
           onChange={(e) => setTicker(e.target.value.toUpperCase())}
+          placeholder="Type a ticker — AAPL"
           autoComplete="off"
           spellCheck={false}
           disabled={loading}
         />
-        <button type="submit" disabled={loading || !ticker.trim()}>
-          {loading ? "Analyzing…" : "Analyze"}
+        <button className="btn-primary" disabled={loading || !ticker.trim()}>
+          {loading ? "…" : "Check"}
         </button>
       </form>
+
+      <div className="chips">
+        {RECENTS.map((t) => (
+          <button key={t} className="chip" onClick={() => run(t)} disabled={loading}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {watchlist.length > 0 && (
+        <div className="chips" style={{ marginTop: -12 }}>
+          <span className="star" style={{ color: "var(--star)", alignSelf: "center", fontSize: 13 }}>
+            ★ Watchlist:
+          </span>
+          {watchlist.map((t) => (
+            <span key={t} className="chip" style={{ display: "inline-flex", gap: 8 }}>
+              <button
+                onClick={() => run(t)}
+                style={{ background: "none", border: "none", color: "inherit", padding: 0 }}
+              >
+                {t}
+              </button>
+              <button
+                onClick={() => toggleWatch(t)}
+                aria-label={`Remove ${t}`}
+                style={{ background: "none", border: "none", color: "var(--text-3)", padding: 0 }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="banner banner-error" role="alert">
@@ -89,73 +152,314 @@ export default function App() {
         </div>
       )}
 
-      {quote && analysis && (
-        <main className="results">
-          <section className="card card-quote">
-            <div className="card-head">
-              <h2>{quote.ticker}</h2>
-              <span className={signalClass(analysis.signal)}>{analysis.signal ?? "—"}</span>
-            </div>
-
-            <p className="price">{formatMoney(quote.price, quote.currency)}</p>
-
-            <div className="metrics">
-              <div>
-                <span className="label">52-week high</span>
-                <span className="value">{formatMoney(quote.high52, quote.currency)}</span>
-              </div>
-              <div>
-                <span className="label">52-week low</span>
-                <span className="value">{formatMoney(quote.low52, quote.currency)}</span>
-              </div>
-            </div>
-
-            {rangePct != null && (
-              <div className="range">
-                <div className="range-track">
-                  <div className="range-fill" style={{ width: `${rangePct}%` }} />
-                  <div className="range-marker" style={{ left: `${rangePct}%` }} />
-                </div>
-                <p className="range-caption">
-                  Price sits {rangePct.toFixed(0)}% up from the 52-week low toward the high.
-                </p>
-              </div>
-            )}
-          </section>
-
-          <section className="card card-analysis">
-            <h3>Outlook</h3>
-            <dl className="analysis-grid">
-              <div>
-                <dt>Trend</dt>
-                <dd>{analysis.trend ?? "—"}</dd>
-              </div>
-              <div>
-                <dt>Target buy zone</dt>
-                <dd>{analysis.buyZone ?? "—"}</dd>
-              </div>
-              <div className="span-full">
-                <dt>Reasoning</dt>
-                <dd>{analysis.reasoning ?? analysis.raw}</dd>
-              </div>
-            </dl>
-          </section>
-        </main>
+      {loading && !data && (
+        <div className="skeleton">
+          <span className="spinner" /> &nbsp;Reading the market…
+        </div>
       )}
 
-      <footer className="footer">
-        {quote && (
-          <p>
-            <a
-              href={`https://finance.yahoo.com/quote/${quote.ticker}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {quote.ticker} on Yahoo Finance
-            </a>
-          </p>
-        )}
-      </footer>
+      {data && (
+        <AnswerCard
+          data={data}
+          onRefresh={() => run(data.quote.ticker)}
+          onFresh={() => run(data.quote.ticker, { fresh: true })}
+          loading={loading}
+          watched={watchlist.includes(data.quote.ticker)}
+          onToggleWatch={() => toggleWatch(data.quote.ticker)}
+          onCreateAlert={(price) => makeAlert(data.quote.ticker, price)}
+        />
+      )}
     </div>
   );
+}
+
+function AnswerCard({
+  data,
+  onRefresh,
+  onFresh,
+  loading,
+  watched,
+  onToggleWatch,
+  onCreateAlert,
+}: {
+  data: CheckResponse;
+  onRefresh: () => void;
+  onFresh: () => void;
+  loading: boolean;
+  watched: boolean;
+  onToggleWatch: () => void;
+  onCreateAlert: (price: number) => Promise<boolean>;
+}) {
+  const { quote, verdict, glance, indicators, buyZone, analysis } = data;
+  const changeUp = (quote.changePct ?? 0) >= 0;
+  const rangePct = indicators.pctOfRange ?? 50;
+
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertPrice, setAlertPrice] = useState(() =>
+    buyZone ? String(buyZone.low) : quote.price ? (quote.price * 0.95).toFixed(2) : "",
+  );
+  const [alertMsg, setAlertMsg] = useState<string | null>(null);
+
+  async function submitAlert() {
+    const price = Number(alertPrice);
+    if (!Number.isFinite(price) || price <= 0) return;
+    const ok = await onCreateAlert(price);
+    setAlertMsg(ok ? `Alert set — we'll flag ${quote.ticker} at $${price}.` : "Couldn't set alert.");
+    if (ok) setAlertOpen(false);
+  }
+
+  return (
+    <>
+      <section className="answer">
+        <div className="answer-head">
+          <div>
+            <div className="ticker">{quote.ticker}</div>
+            <div className="name">{quote.name}</div>
+          </div>
+          <div className="answer-price">
+            <span className="px">{money(quote.price, quote.currency)}</span>
+            {quote.changePct != null && (
+              <span className={`chg ${changeUp ? "up" : "down"}`}>
+                {pct(quote.changePct)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="verdict">
+          <div className={`label ${toneClass(verdict.tone)}`}>{verdict.label}</div>
+          <div className="why">{data.why}</div>
+          <div className="confidence" style={{ color: `var(--${verdict.tone})` }}>
+            <div className="bars">
+              {[1, 2, 3, 4].map((n) => (
+                <div key={n} className={`bar ${n <= data.confidence ? "on" : ""}`} />
+              ))}
+            </div>
+            <span className="txt">Confidence</span>
+          </div>
+        </div>
+
+        <div className="glance">
+          <GlanceCell k="Timing" word={glance.timing} info="timing" />
+          <GlanceCell k="Quality" word={glance.quality} info="quality" />
+          <GlanceCell k="Price" word={glance.price} info="price" />
+        </div>
+
+        <div className="pricepos">
+          <div className="track">
+            <div className="marker" style={{ left: `${rangePct}%` }} />
+          </div>
+          <div className="ends">
+            <span>{money(quote.low52, quote.currency)}</span>
+            <span>{money(quote.high52, quote.currency)}</span>
+          </div>
+          <div className="cap">
+            Where today's price sits vs the past year{" "}
+            <InfoTip
+              title={GLOSSARY.pricepos.title}
+              text={GLOSSARY.pricepos.text}
+              label="price position"
+            />
+          </div>
+        </div>
+
+        <div className="actions">
+          <button className="btn-ghost btn-sm" onClick={onToggleWatch}>
+            {watched ? "★ On watchlist" : "☆ Save to watchlist"}
+          </button>
+          <button className="btn-ghost btn-sm" onClick={() => setAlertOpen((v) => !v)}>
+            🔔 Alert me at a price
+          </button>
+        </div>
+
+        {alertOpen && (
+          <div className="actions" style={{ marginTop: 12, alignItems: "center" }}>
+            <span className="muted" style={{ fontSize: 14 }}>
+              Alert me when {quote.ticker} drops to
+            </span>
+            <input
+              value={alertPrice}
+              onChange={(e) => setAlertPrice(e.target.value)}
+              inputMode="decimal"
+              style={{
+                width: 110,
+                background: "var(--surface-2)",
+                border: "1px solid var(--hairline)",
+                borderRadius: 10,
+                color: "var(--text)",
+                padding: "8px 12px",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            />
+            <button className="btn-primary btn-sm" onClick={submitAlert}>
+              Set alert
+            </button>
+          </div>
+        )}
+        {alertMsg && (
+          <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
+            {alertMsg}
+          </p>
+        )}
+
+        <div className="freshness">
+          <span className="live">●</span>
+          <span>
+            Price live · analysis{" "}
+            {data.llm
+              ? data.cached
+                ? "by Claude (cached this quarter)"
+                : "by Claude"
+              : "from the numbers"}{" "}
+            · as of{" "}
+            {new Date(data.asOf).toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+          </span>
+          <button onClick={onRefresh} disabled={loading}>
+            {loading ? "…" : "Refresh"}
+          </button>
+          <button onClick={onFresh} disabled={loading} title="Run a live Claude deep-dive">
+            Fresh deep-dive
+          </button>
+        </div>
+      </section>
+
+      <WhyExpander data={data} />
+
+      <details className="exp">
+        <summary>
+          Show the details <span className="caret">⌄</span>
+        </summary>
+        <div className="exp-body">
+          <PriceChart
+            timestamps={data.series.timestamp}
+            closes={data.series.close}
+            buyZone={buyZone}
+            currency={quote.currency}
+          />
+          <div className="metrics">
+            <Metric k="Momentum" info="momentum" v={momentumWord(indicators.rsi14)} />
+            <Metric k="Trend" info="trend" v={glance.trend.word} />
+            <Metric k="Ups & downs" info="updowns" v={glance.volatility.word} />
+            <Metric k="From its high" info="fromhigh" v={glance.drawdown.word} />
+          </div>
+          {analysis && (
+            <p className="muted" style={{ marginTop: 14, fontSize: 13 }}>
+              Fundamental quality: <strong>{analysis.fundamental_score}/10</strong> ·
+              growth {analysis.dimensions.growth}, profitability{" "}
+              {analysis.dimensions.profitability}, balance sheet{" "}
+              {analysis.dimensions.balance_sheet}, valuation{" "}
+              {analysis.dimensions.valuation}, moat {analysis.dimensions.moat}
+            </p>
+          )}
+          {!analysis && (
+            <p className="muted" style={{ marginTop: 14, fontSize: 13 }}>
+              A Claude deep-dive (bull/bear + quality score) appears here when an
+              ANTHROPIC_API_KEY is configured.
+            </p>
+          )}
+        </div>
+      </details>
+    </>
+  );
+}
+
+function WhyExpander({ data }: { data: CheckResponse }) {
+  const a = data.analysis;
+  const inFavor = a?.bull ?? deterministicFavor(data);
+  const watchOut = a?.bear ?? deterministicWatch(data);
+  const plan = a?.invalidation ?? deterministicPlan(data);
+  return (
+    <details className="exp" open>
+      <summary>
+        Why this call? <span className="caret">⌄</span>
+      </summary>
+      <div className="exp-body">
+        <div className="reason">
+          <div className="rk up">In its favor</div>
+          <div className="rv">
+            <ul>
+              {inFavor.map((x, i) => (
+                <li key={i}>{x}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <div className="reason">
+          <div className="rk warn">Watch out</div>
+          <div className="rv">
+            <ul>
+              {watchOut.map((x, i) => (
+                <li key={i}>{x}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <div className="reason">
+          <div className="rk accent">A good plan</div>
+          <div className="rv">{plan}</div>
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function GlanceCell({ k, word, info }: { k: string; word: Word; info: string }) {
+  const g = GLOSSARY[info];
+  return (
+    <div className="glance-cell">
+      <div className="k">
+        {k} <InfoTip title={g.title} text={g.text} label={k} />
+      </div>
+      <div className={`v ${word.tone}`}>{word.word}</div>
+    </div>
+  );
+}
+
+function Metric({ k, v, info }: { k: string; v: string; info: string }) {
+  const g = GLOSSARY[info];
+  return (
+    <div className="metric">
+      <div className="mk">
+        {k} <InfoTip title={g.title} text={g.text} label={k} />
+      </div>
+      <div className="mv">{v}</div>
+    </div>
+  );
+}
+
+function momentumWord(rsi: number | null): string {
+  if (rsi == null) return "—";
+  return `${num(rsi, 0)} (${rsi >= 70 ? "hot" : rsi <= 30 ? "cold" : "neutral"})`;
+}
+
+// Deterministic "Why this call?" content when no LLM deep-dive is present.
+function deterministicFavor(d: CheckResponse): string[] {
+  const out: string[] = [];
+  if (d.glance.trend.word === "Pointing up") out.push("The price trend is pointing up.");
+  if (d.glance.price.word === "Looks cheap")
+    out.push("It trades near the low end of its past-year range.");
+  if (d.glance.volatility.word === "Calm") out.push("Day-to-day moves are calm.");
+  if (!out.length) out.push("Nothing stands out as strongly in its favor right now.");
+  return out;
+}
+function deterministicWatch(d: CheckResponse): string[] {
+  const out: string[] = [];
+  if (d.glance.trend.word === "Pointing down") out.push("The price trend is pointing down.");
+  if (d.glance.price.word === "Looks pricey")
+    out.push("It trades near the high end of its past-year range.");
+  if (d.glance.timing.word === "Running hot")
+    out.push("It has run hot recently — a pullback is possible.");
+  if (d.glance.volatility.word === "Bumpy") out.push("Moves are bumpy — expect swings.");
+  if (!out.length) out.push("No major red flags in the price data.");
+  return out;
+}
+function deterministicPlan(d: CheckResponse): string {
+  if (!d.buyZone) return "Wait for a clearer setup before buying.";
+  return `Consider buying near ${money(d.buyZone.low, d.quote.currency)}–${money(
+    d.buyZone.high,
+    d.quote.currency,
+  )} rather than chasing the current price.`;
 }

@@ -4,42 +4,67 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A personal stock analysis tool: **web UI + Node API** (primary), with legacy **Google Apps Script + Sheet** code kept at the repo root.
+A **beginner-first equity app**: a web UI + Node API that answers "is this a good time to buy?" in plain English on one screen, with advanced macro/scanner tools behind a Pro toggle. Design ported from the Minset watch app; analytics ported from the `stock-analyzer` Python repo. Data is free (Yahoo Finance + FRED); the LLM is Claude.
 
 ## Commands
 
 ```bash
-# Development (API :3001 + UI :5173, with hot reload)
 npm install
-cp server/.env.example server/.env   # set GEMINI_API_KEY
-npm run dev
+cp server/.env.example server/.env   # set ANTHROPIC_API_KEY (optional — app runs without it)
+npm run dev                          # API :3001 + UI :5173 (hot reload)
 
-# Run tests (unit + live fetch; Gemini test skipped if no API key)
-npm test
+npm test                             # server unit tests (node --test)
+npm run typecheck                    # web tsc --noEmit
+npm run build                        # builds web/dist
+npm start                            # serves API + static UI on PORT (default 3001)
 
-# Production build
-npm run build        # builds web/dist
-npm start            # serves API + static UI on PORT (default 3001)
-
-# Docker
-docker compose up --build
+# Offline/demo (no live data or key needed):
+STOCK_FIXTURES=1 STATIC_DIR=../web/dist npm start
 ```
 
-## Architecture
+## Architecture — 3-layer pipeline behind a freshness store
 
-**Request flow** for `POST /api/analyze`:
-1. `server/src/analyze.js` — orchestrates the pipeline
-2. `server/src/stocks.js` — fetches 1-year daily chart from Yahoo Finance (no key needed); returns `{ ticker, price, high52, low52, currency }`
-3. `server/src/prompt.js` — builds the Gemini prompt with derived metrics (% of 52-week range, distances from high/low)
-4. `server/src/llm.js` — calls `gemini-2.5-flash` via REST; model overridable with `GEMINI_MODEL` env var
-5. `server/src/parseAnalysis.js` — parses the strict 4-field LLM response into `{ trend, buyZone, signal, reasoning, raw }`
+Scheduled jobs (`server/src/scheduler.js`, node-cron) write snapshots to SQLite
+(`server/src/db.js`, better-sqlite3); read endpoints serve the latest instantly
+with an `{ data, asOf, stale }` envelope. Every layer degrades gracefully.
 
-**Dual-mode server**: when `STATIC_DIR` is set, `server/src/index.js` serves the built React app and acts as a combined UI+API server (production/Docker mode). Without it, it's API-only and Vite proxies to it in dev.
+- **Simple Check** (`GET /api/check/:sym`) → `analyze.js`: live price + OHLCV
+  series (`stocks.js`, Yahoo→Stooq→fixtures fallback) → technicals
+  (`indicators.js`) → beginner-language glance + deterministic verdict
+  (`language.js`, `verdict.js`) → optional Claude deep-dive (`llm.js`, Opus 4.8,
+  structured output). Deep-dive is cached by quarter (`analyst/analyzer.js`);
+  `?fresh=1` forces a live call, `?deep=0` skips the LLM.
+- **L1 Macro gate** (`GET /api/macro`) → `macro/compute.js` + `macro/signals.js`:
+  6 weighted signals → composite → FULL DEPLOY / REDUCED / DEFENSIVE zone.
+- **L2 Scanner** (`GET /api/scanner`) → `scanner/engine.js` + `scanner/factors.js`:
+  S&P 500 universe, 5 percentile-ranked factors, composite. Gated by the macro
+  zone (DEFENSIVE = off, REDUCED = composite ≥ 75).
+- **L3 Analyst** (`analyst/`): Sonnet Message-Batch fundamental scoring cached by
+  `(ticker, quarter_end)`; `blender.js` blends quant (60%) + fundamental (40%),
+  re-ranks, flags rank shifts ≥ 3 as upgrades/downgrades (joined into `/api/scanner`).
+- **Watchlist + alerts**: `watchlist`/`alerts` tables; `alerts.js` checks buy-zone
+  crossings on a cron and emails via Resend (optional — otherwise marks triggered).
 
-**Web app** (`web/`) is a single-component React app (`App.tsx`). `web/src/api.ts` calls `POST /api/analyze` and `web/src/types.ts` defines `Quote`, `Analysis`, and `AnalyzeResponse`.
+`POST /api/refresh/:layer` (macro|scanner|analyst) kicks a background recompute.
 
-**Docker**: multi-stage build — `web-build` stage runs `npm run build`, production stage copies only `server/src` and `web/dist`. Exposes port 3001 internally; `docker-compose.yml` maps to host port 8088.
+**Dual-mode server**: `index.js` serves the built React app when `STATIC_DIR` is
+set (production/Docker), else API-only with Vite proxying in dev.
+
+**Web** (`web/`): `App.tsx` (Simple Check view) + `ProView.tsx` (macro + scanner).
+Components in `web/src/components/` (InfoTip, PriceChart, SegmentedControl);
+design tokens in `web/src/index.css`; plain-language copy in `web/src/lib/glossary.ts`.
+
+## Key conventions
+
+- yfinance ticker format uses hyphens not dots (`BRK-B` not `BRK.B`).
+- Model IDs: deep-dive `claude-opus-4-8`, analyst `claude-sonnet-4-6` (override via
+  `ANTHROPIC_DEEPDIVE_MODEL` / `ANTHROPIC_ANALYST_MODEL`). Structured output via
+  `output_config.format`; adaptive thinking on the deep-dive.
+- Design system: dark-only, system font, `tabular-nums` on figures. Tokens ported
+  from Minset (`--bg:#000`, `--surface:#0e0e0f`, `--radius:18px`, iOS up/down colors).
+- `STOCK_FIXTURES=1` serves deterministic demo data (never used unless opted in).
 
 ## Legacy Apps Script (optional)
 
-Numbered `01 -` … `05 -` files deploy via [clasp](https://github.com/google/clasp). Sheet-based UI uses checkboxes and `GOOGLEFINANCE` via temporary spreadsheets. LLM uses `asUtility.SubmitRequestToGCPAPI` → Gemini `generateContent`; the web app calls the same Gemini API with `GEMINI_API_KEY` in `server/.env`.
+Numbered `01 -` … `05 -` files at the repo root deploy via clasp — the original
+Google Sheet prototype, kept for reference. Not part of the Node app.
