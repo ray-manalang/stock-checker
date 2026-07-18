@@ -23,7 +23,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = path.join(__dirname, "..", "..", ".cache");
 const UNIVERSE_CACHE = path.join(CACHE_DIR, "sp500.json");
 const UNIVERSE_TTL_MS = 24 * 60 * 60 * 1000;
-const REDUCED_THRESHOLD = 75;
+// In a REDUCED (cautious) market, show fewer, higher-ranked names — but never an
+// empty list. (The old absolute composite>=75 cutoff filtered everything out,
+// since the composite is a mean of percentile ranks and rarely clears 75.)
+const REDUCED_TOP = 20;
 
 // ~100 largest US names, size-ordered — the default universe (a meaningful
 // "top-ranked" scan that fits a free data tier). The full S&P 500 is opt-in via
@@ -176,11 +179,8 @@ export async function runScanner({ macroMode = "OFFENSIVE", top = 100 } = {}) {
   }
 
   let rows = buildComposite(tickers, factorMaps);
-  if (macroMode === "REDUCED") {
-    rows = rows.filter((r) => (r.composite ?? 0) >= REDUCED_THRESHOLD);
-    rows.forEach((r, i) => (r.rank = i + 1));
-  }
-  rows = rows.slice(0, top);
+  const limit = macroMode === "REDUCED" ? Math.min(top, REDUCED_TOP) : top;
+  rows = rows.slice(0, limit);
 
   const breadth = computeBreadth(closesMap);
   saveScanner(rows, macroMode);
@@ -217,7 +217,7 @@ function fixtureScanner(macroMode) {
       high_52wk_prox: composite - 2,
     },
   }));
-  if (macroMode === "REDUCED") rows = rows.filter((r) => r.composite >= REDUCED_THRESHOLD);
+  if (macroMode === "REDUCED") rows = rows.slice(0, REDUCED_TOP);
   rows.forEach((r, i) => (r.rank = i + 1));
   return rows;
 }

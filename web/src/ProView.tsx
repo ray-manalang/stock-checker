@@ -5,6 +5,7 @@ import { GLOSSARY } from "./lib/glossary";
 import { num } from "./lib/format";
 
 type Envelope<T> = { data: T; asOf: string; stale?: boolean };
+type ScannerEnv = Envelope<ScannerRow[]> & { macroMode?: string; scannerActive?: boolean };
 
 type MacroSignal = { signal: string; score: number; detail?: string };
 type Macro = {
@@ -42,7 +43,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function ProView() {
   const [macro, setMacro] = useState<Envelope<Macro> | null>(null);
-  const [scanner, setScanner] = useState<Envelope<ScannerRow[]> | null>(null);
+  const [scanner, setScanner] = useState<ScannerEnv | null>(null);
   const [macroReady, setMacroReady] = useState(false);
   const [scanReady, setScanReady] = useState(false);
   const [refreshing, setRefreshing] = useState<{ macro?: boolean; scanner?: boolean }>({});
@@ -57,7 +58,7 @@ export function ProView() {
   const loadScanner = useCallback(async () => {
     const j = await fetch("/api/scanner").then((r) => (r.ok ? r.json() : null)).catch(() => null);
     if (liveRef.current) setScanner(j);
-    return j as Envelope<ScannerRow[]> | null;
+    return j as ScannerEnv | null;
   }, []);
 
   useEffect(() => {
@@ -205,9 +206,11 @@ export function ProView() {
         ) : (
           <div className="insight-foot" style={{ padding: "18px" }}>
             {scanReady
-              ? refreshing.scanner
-                ? "Building the first ranking…"
-                : "No ranking yet — hit Refresh to run the scanner."
+              ? scanner?.scannerActive === false
+                ? "Scanner is off — market conditions are defensive (no new longs)."
+                : refreshing.scanner
+                  ? "Building the first ranking…"
+                  : "No ranking yet — hit Refresh to run the scanner."
               : "Loading…"}
           </div>
         )}
