@@ -121,6 +121,28 @@ export async function fetchChart(ticker, range = "1y") {
   }
 }
 
+// Company names are static — cache them so we only spend one extra request the
+// first time a symbol is seen.
+const _tdNameCache = new Map();
+async function twelveDataName(key, tdSym) {
+  if (_tdNameCache.has(tdSym)) return _tdNameCache.get(tdSym);
+  try {
+    const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(
+      tdSym,
+    )}&apikey=${encodeURIComponent(key)}`;
+    const res = await fetch(url, { headers: { "User-Agent": UA } });
+    if (res.ok) {
+      const q = await res.json();
+      const name = typeof q?.name === "string" && q.name ? q.name : null;
+      if (name) _tdNameCache.set(tdSym, name);
+      return name;
+    }
+  } catch {
+    /* best-effort */
+  }
+  return null;
+}
+
 // Free daily OHLCV via Twelve Data (https://twelvedata.com — free API key).
 async function fetchTwelveDataChart(symbol, range) {
   const key = process.env.TWELVE_DATA_API_KEY.trim();
@@ -158,10 +180,13 @@ async function fetchTwelveDataChart(symbol, range) {
   const price = close[close.length - 1];
   const prev = close[close.length - 2];
   const oneYear = close.slice(-252);
+  // meta.name is usually empty on the free tier — fall back to a cached /quote.
+  let name = data.meta?.name;
+  if (!name || name === tdSym) name = (await twelveDataName(key, tdSym)) ?? symbol;
   return {
     quote: {
       ticker: symbol,
-      name: data.meta?.name ?? symbol,
+      name,
       price,
       changePct: prev > 0 ? ((price - prev) / prev) * 100 : null,
       high52: Math.max(...oneYear),
