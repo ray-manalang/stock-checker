@@ -6,7 +6,19 @@ services:
     ports:
       - "8088:3001"
     environment:
-      GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in Portainer stack environment}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      # Optional — enables the Claude deep-dive + analyst layer. The app runs
+      # without it (falls back to the deterministic verdict engine).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Optional fallback data source. Yahoo via the built-in Python sidecar is
+      # primary; Twelve Data is only used if the sidecar is unavailable.
+      TWELVE_DATA_API_KEY: ${TWELVE_DATA_API_KEY:-}
       PORT: "3001"
       STATIC_DIR: /app/web/dist
+      # Persist the SQLite store (watchlist, alerts, cached scores, usage) on a
+      # named volume so it survives redeploys.
+      DB_PATH: /app/data/stock-checker.db
+    volumes:
+      - stock-checker-data:/app/data
+
+volumes:
+  stock-checker-data:
