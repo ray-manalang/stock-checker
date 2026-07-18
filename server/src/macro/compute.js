@@ -1,5 +1,6 @@
-import { fetchSparkCloses } from "../stocks.js";
+import { fetchSeriesMulti } from "../stocks.js";
 import { sma } from "../indicators.js";
+import { freshSeriesMap, setCachedSeries } from "../db.js";
 import {
   vixLevel,
   vixTermStructure,
@@ -20,6 +21,26 @@ const BREADTH_SAMPLE = [
 
 const FRED_HY_OAS =
   "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAMLH0A0HYM2";
+// VIX daily close from FRED (Yahoo's ^VIX is unreachable on many networks).
+const FRED_VIX = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS";
+const PRICE_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Daily closes for a set of symbols, served from the 24h price cache and
+// back-filled via the provider-agnostic fetch (keeps the 20-min macro cron off
+// the data provider's quota).
+async function cachedCloses(symbols) {
+  const { fresh, stale } = freshSeriesMap(symbols, PRICE_TTL_MS);
+  if (stale.length) {
+    const fetched = await fetchSeriesMulti(stale, "1y");
+    for (const [s, series] of Object.entries(fetched)) {
+      setCachedSeries(s, series);
+      fresh[s] = series;
+    }
+  }
+  const out = {};
+  for (const [s, series] of Object.entries(fresh)) out[s] = series?.closes ?? null;
+  return out;
+}
 
 async function safe(fn, fallback) {
   try {
@@ -60,16 +81,18 @@ export async function computeMacro({ breadthOverride = null } = {}) {
     return persist(fixtureMacro());
   }
 
-  // One batched spark request for the VIX family + factor ETFs (+ the breadth
-  // sample when the scanner hasn't supplied breadth).
-  const needBreadth = breadthOverride == null;
-  const symbols = ["^VIX", "^VIX3M", ...FACTOR_ETFS];
-  if (needBreadth) symbols.push(...BREADTH_SAMPLE);
-  const spark = await safe(() => fetchSparkCloses(symbols, "1y"), {});
-  const closesOf = (s) => spark[s]?.closes ?? null;
+  // VIX from FRED (VIXCLS) — reachable where Yahoo's ^VIX is not. VIX3M has no
+  // free source, so the term-structure signal degrades and the composite
+  // re-weights over the remaining five.
+  const vix = await safe(() => fetchFredSeries(FRED_VIX), null);
+  const vix3m = null;
 
-  const vix = closesOf("^VIX");
-  const vix3m = closesOf("^VIX3M");
+  // Factor ETFs (+ breadth sample) via the cached provider-agnostic fetch.
+  const needBreadth = breadthOverride == null;
+  const priceSymbols = [...FACTOR_ETFS];
+  if (needBreadth) priceSymbols.push(...BREADTH_SAMPLE);
+  const closes = await safe(() => cachedCloses(priceSymbols), {});
+  const closesOf = (s) => closes[s] ?? null;
 
   // Credit spreads via FRED HY OAS (independent of Yahoo).
   const oas = await safe(() => fetchFredSeries(FRED_HY_OAS), null);

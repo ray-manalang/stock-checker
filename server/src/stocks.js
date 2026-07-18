@@ -351,6 +351,56 @@ export function parseSpark(json) {
 }
 
 /**
+ * Provider-agnostic multi-symbol series fetch for the Pro layer. Uses Twelve
+ * Data when a key is set (returns volume too, paced to the free tier's 8
+ * credits/min), otherwise Yahoo's batched spark endpoint (close-only). Returns
+ * { symbol: { closes, volumes?, timestamp } }; failed symbols are simply absent.
+ */
+export async function fetchSeriesMulti(symbols, range = "1y") {
+  if (process.env.TWELVE_DATA_API_KEY?.trim()) {
+    return fetchTwelveDataMulti(symbols, range);
+  }
+  return fetchSparkCloses(symbols, range);
+}
+
+async function fetchTwelveDataMulti(symbols, range) {
+  const key = process.env.TWELVE_DATA_API_KEY.trim();
+  const outputsize = range === "5y" ? 1300 : range === "5d" ? 10 : 300;
+  const out = {};
+  for (let i = 0; i < symbols.length; i++) {
+    const sym = symbols[i];
+    const tdSym = sym.replace(/-/g, ".");
+    const url =
+      `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSym)}` +
+      `&interval=1day&outputsize=${outputsize}&order=ASC&apikey=${encodeURIComponent(key)}`;
+    try {
+      const res = await fetch(url, { headers: { "User-Agent": UA } });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status !== "error" && Array.isArray(data.values)) {
+          const closes = [];
+          const volumes = [];
+          const timestamp = [];
+          for (const row of data.values) {
+            const c = Number(row.close);
+            if (!Number.isFinite(c)) continue;
+            closes.push(c);
+            volumes.push(Number(row.volume) || 0);
+            timestamp.push(Math.floor(new Date(row.datetime).getTime() / 1000));
+          }
+          if (closes.length) out[sym] = { closes, volumes, timestamp };
+        }
+      }
+    } catch {
+      /* skip; caller degrades */
+    }
+    // Pace under the free tier's 8 credits/minute.
+    if (i + 1 < symbols.length) await sleep(8000);
+  }
+  return out;
+}
+
+/**
  * Batched close series for many symbols via Yahoo's spark endpoint — one HTTP
  * request per ~chunkSize symbols instead of one per symbol. This is what makes
  * the macro gate and scanner viable without tripping Yahoo's per-request
