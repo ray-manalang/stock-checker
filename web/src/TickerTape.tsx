@@ -27,8 +27,10 @@ export function TickerTape({ watchlist }: { watchlist: string[] }) {
 
   if (!watchlist.length || !quotes.length) return null;
 
-  // Duplicate the sequence so the -50% keyframe loops seamlessly.
-  const seq = [...quotes, ...quotes];
+  // Sort alphabetically by ticker, then duplicate so the -50% keyframe loops
+  // seamlessly.
+  const sorted = [...quotes].sort((a, b) => a.ticker.localeCompare(b.ticker));
+  const seq = [...sorted, ...sorted];
 
   return (
     <div className="tape" aria-label="Watchlist ticker">
