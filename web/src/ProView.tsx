@@ -5,7 +5,25 @@ import { GLOSSARY } from "./lib/glossary";
 import { money, num } from "./lib/format";
 
 type Envelope<T> = { data: T; asOf: string; stale?: boolean };
-type ScannerEnv = Envelope<ScannerRow[]> & { macroMode?: string; scannerActive?: boolean };
+type BlendSummary = {
+  candidates: number;
+  upgrades: number;
+  downgrades: number;
+  avgBlended: number;
+  top5: string[];
+};
+type ScannerEnv = Envelope<ScannerRow[]> & {
+  macroMode?: string;
+  scannerActive?: boolean;
+  blended?: boolean;
+  summary?: BlendSummary | null;
+};
+type AnalystDetail = {
+  dimensions: Record<string, number> | null;
+  notes: string | null;
+  fundamentalScore: number | null;
+  model?: string | null;
+};
 
 type MacroSignal = { signal: string; score: number; detail?: string };
 type Macro = {
@@ -21,11 +39,29 @@ type ScannerRow = {
   name?: string | null;
   composite: number;
   rank: number;
+  quantRank?: number;
+  rankDelta?: number;
   rankFlag?: string;
   blendedScore?: number;
   price?: number | null;
   changePct?: number | null;
+  analyst?: AnalystDetail | null;
 };
+
+const DIM_LABELS: Record<string, string> = {
+  earnings_quality: "Earnings quality",
+  growth_trajectory: "Growth",
+  balance_sheet_health: "Balance sheet",
+  margin_trends: "Margins",
+  red_flags: "Red flags (inv.)",
+  growth: "Growth",
+  profitability: "Profitability",
+  balance_sheet: "Balance sheet",
+  valuation: "Valuation",
+  moat: "Moat",
+};
+const dimLabel = (k: string) =>
+  DIM_LABELS[k] ?? k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 const ZONE_TONE: Record<string, string> = {
   "FULL DEPLOY": "up",
@@ -60,7 +96,15 @@ export function ProView() {
   const [macroReady, setMacroReady] = useState(false);
   const [scanReady, setScanReady] = useState(false);
   const [refreshing, setRefreshing] = useState<{ macro?: boolean; scanner?: boolean }>({});
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const liveRef = useRef(true);
+
+  const toggleRow = (ticker: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(ticker) ? next.delete(ticker) : next.add(ticker);
+      return next;
+    });
 
   const loadMacro = useCallback(async () => {
     const j = await fetch("/api/macro").then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -114,6 +158,9 @@ export function ProView() {
 
   const m = macro?.data;
   const rows = scanner?.data ?? [];
+  const summary = scanner?.summary ?? null;
+  const upgrades = rows.filter((r) => r.rankFlag === "upgrade");
+  const downgrades = rows.filter((r) => r.rankFlag === "downgrade");
 
   return (
     <>
@@ -210,51 +257,108 @@ export function ProView() {
           </div>
         )}
         <div className="insight-divider" />
+
+        {/* L3 analyst summary + disagreements (only once fundamentals are blended in) */}
+        {scanner?.blended && summary && (
+          <>
+            <div className="insight-cells">
+              <div className="insight-cell">
+                <div className="label">Candidates</div>
+                <div className="val">{summary.candidates}</div>
+              </div>
+              <div className="insight-cell">
+                <div className="label">Upgrades</div>
+                <div className="val up">{summary.upgrades}</div>
+              </div>
+              <div className="insight-cell">
+                <div className="label">Downgrades</div>
+                <div className="val down">{summary.downgrades}</div>
+              </div>
+              <div className="insight-cell">
+                <div className="label">Avg blended</div>
+                <div className="val">{summary.avgBlended.toFixed(2)}</div>
+              </div>
+            </div>
+            {(upgrades.length > 0 || downgrades.length > 0) && (
+              <div style={{ padding: "0 18px 14px" }}>
+                <div
+                  className="subtitle"
+                  style={{ marginBottom: 8, color: "var(--text-2)" }}
+                >
+                  Quant vs analyst disagreements (rank shift ≥ 3)
+                </div>
+                <div style={{ display: "flex", gap: 20, flexWrap: "wrap", fontSize: 13 }}>
+                  <Disagreement rows={upgrades} tone="up" arrow="▲" empty="No upgrades" />
+                  <Disagreement rows={downgrades} tone="down" arrow="▼" empty="No downgrades" />
+                </div>
+              </div>
+            )}
+            <div className="insight-divider" />
+          </>
+        )}
+
         {rows.length > 0 ? (
           <div
             className="rows"
             style={{ border: "none", borderRadius: 0, maxHeight: 460, overflowY: "auto" }}
           >
-            {rows.slice(0, 20).map((r) => (
-              <div className="s-row" key={r.ticker}>
-                <span className="s-rank">{r.rank}</span>
-                <span className="s-main">
-                  <span className="s-name">
-                    <a
-                      href={`https://finance.yahoo.com/quote/${r.ticker}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: "var(--text)", textDecoration: "none" }}
-                    >
-                      {r.ticker}
-                    </a>
-                    {r.rankFlag === "upgrade" && (
-                      <span className="pill up" style={{ marginLeft: 8, fontSize: 11 }}>
-                        ▲ upgrade
+            {rows.slice(0, 20).map((r) => {
+              const hasDetail = !!r.analyst;
+              const open = expanded.has(r.ticker);
+              return (
+                <div key={r.ticker}>
+                  <div
+                    className="s-row"
+                    onClick={hasDetail ? () => toggleRow(r.ticker) : undefined}
+                    style={{ cursor: hasDetail ? "pointer" : "default" }}
+                  >
+                    <span className="s-rank">{r.rank}</span>
+                    <span className="s-main">
+                      <span className="s-name">
+                        <a
+                          href={`https://finance.yahoo.com/quote/${r.ticker}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ color: "var(--text)", textDecoration: "none" }}
+                        >
+                          {r.ticker}
+                        </a>
+                        {r.rankFlag === "upgrade" && (
+                          <span className="pill up" style={{ marginLeft: 8, fontSize: 11 }}>
+                            ▲ upgrade
+                          </span>
+                        )}
+                        {r.rankFlag === "downgrade" && (
+                          <span className="pill down" style={{ marginLeft: 8, fontSize: 11 }}>
+                            ▼ downgrade
+                          </span>
+                        )}
+                        {hasDetail && (
+                          <span className="caret" style={{ marginLeft: 8, color: "var(--text-3)", fontSize: 12 }}>
+                            {open ? "▴" : "▾"}
+                          </span>
+                        )}
                       </span>
-                    )}
-                    {r.rankFlag === "downgrade" && (
-                      <span className="pill down" style={{ marginLeft: 8, fontSize: 11 }}>
-                        ▼ downgrade
-                      </span>
-                    )}
-                  </span>
-                  {r.name && <span className="s-sub">{r.name}</span>}
-                </span>
-                <span className="s-meta">
-                  <span className="s-px">{money(r.price, "USD")}</span>
-                  {r.changePct != null ? (
-                    <span className={`s-chg ${r.changePct >= 0 ? "up" : "down"}`}>
-                      {r.changePct >= 0 ? "▲" : "▼"} {Math.abs(r.changePct).toFixed(2)}%
+                      {r.name && <span className="s-sub">{r.name}</span>}
                     </span>
-                  ) : (
-                    <span className="s-chg" style={{ color: "var(--text-3)" }}>
-                      score {num(r.composite, 0)}
+                    <span className="s-meta">
+                      <span className="s-px">{money(r.price, "USD")}</span>
+                      {r.changePct != null ? (
+                        <span className={`s-chg ${r.changePct >= 0 ? "up" : "down"}`}>
+                          {r.changePct >= 0 ? "▲" : "▼"} {Math.abs(r.changePct).toFixed(2)}%
+                        </span>
+                      ) : (
+                        <span className="s-chg" style={{ color: "var(--text-3)" }}>
+                          score {num(r.composite, 0)}
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-              </div>
-            ))}
+                  </div>
+                  {open && r.analyst && <AnalystPanel row={r} />}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="insight-foot" style={{ padding: "18px" }}>
@@ -269,6 +373,92 @@ export function ProView() {
         )}
       </div>
     </>
+  );
+}
+
+function Disagreement({
+  rows,
+  tone,
+  arrow,
+  empty,
+}: {
+  rows: ScannerRow[];
+  tone: "up" | "down";
+  arrow: string;
+  empty: string;
+}) {
+  return (
+    <div style={{ flex: 1, minWidth: 200 }}>
+      {rows.length === 0 ? (
+        <div className="muted" style={{ fontSize: 12 }}>
+          {empty}
+        </div>
+      ) : (
+        rows
+          .slice()
+          .sort((a, b) => Math.abs(b.rankDelta ?? 0) - Math.abs(a.rankDelta ?? 0))
+          .map((r) => (
+            <div key={r.ticker} style={{ padding: "2px 0" }}>
+              <span className={tone} style={{ fontWeight: 700 }}>
+                {arrow} {r.ticker}
+              </span>{" "}
+              <span className="muted" style={{ fontVariantNumeric: "tabular-nums" }}>
+                #{r.quantRank} → #{r.rank} (Δ{(r.rankDelta ?? 0) > 0 ? "+" : ""}
+                {r.rankDelta})
+              </span>
+            </div>
+          ))
+      )}
+    </div>
+  );
+}
+
+function AnalystPanel({ row }: { row: ScannerRow }) {
+  const a = row.analyst!;
+  return (
+    <div
+      style={{
+        padding: "12px 16px 16px 54px",
+        borderBottom: "1px solid var(--hairline-soft)",
+        background: "var(--surface-2)",
+      }}
+    >
+      {a.dimensions && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 22px", marginBottom: 10 }}>
+          {Object.entries(a.dimensions).map(([k, v]) => (
+            <div key={k}>
+              <div style={{ fontSize: 11, color: "var(--text-3)" }}>{dimLabel(k)}</div>
+              <div style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                {v}/10
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ fontSize: 13, marginBottom: a.notes ? 8 : 0 }}>
+        Fundamental score:{" "}
+        <strong>{a.fundamentalScore != null ? `${a.fundamentalScore}/10` : "—"}</strong>
+        {row.rankDelta != null && (
+          <span className="muted">
+            {" · "}quant #{row.quantRank} → blended #{row.rank} (Δ
+            {row.rankDelta > 0 ? "+" : ""}
+            {row.rankDelta})
+          </span>
+        )}
+      </div>
+      {a.notes && (
+        <div
+          style={{
+            fontSize: 13,
+            color: "var(--text-2)",
+            borderLeft: "3px solid var(--accent)",
+            paddingLeft: 12,
+          }}
+        >
+          {a.notes}
+        </div>
+      )}
+    </div>
   );
 }
 

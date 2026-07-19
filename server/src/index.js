@@ -19,6 +19,7 @@ import {
   getCachedSeries,
   recordCheck,
   recentChecks,
+  getAnalystDetail,
 } from "./db.js";
 import {
   startScheduler,
@@ -134,21 +135,33 @@ app.get("/api/scanner", (_req, res) => {
 
   let rows = run.rows;
   let blended = false;
+  let summary = null;
   const funds = latestFundamentalScores(run.rows.map((r) => r.ticker));
   if (Object.keys(funds).length) {
     const merged = blend(
       run.rows.map((r) => ({ ...r, quant: r.composite, fundamental: funds[r.ticker] ?? null })),
     );
+    const detail = getAnalystDetail(merged.map((r) => r.ticker));
     rows = merged.map((r) => ({
       ticker: r.ticker,
       composite: r.composite,
       rank: r.blendedRank,
       quantRank: r.quantRank,
       blendedScore: r.blendedScore,
+      rankDelta: r.rankDelta,
       rankFlag: r.rankFlag,
       fundamental: r.fundamental,
       factors: r.factors,
+      analyst: detail[r.ticker] ?? null,
     }));
+    const n = merged.length || 1;
+    summary = {
+      candidates: merged.length,
+      upgrades: merged.filter((r) => r.rankFlag === "upgrade").length,
+      downgrades: merged.filter((r) => r.rankFlag === "downgrade").length,
+      avgBlended: Number((merged.reduce((s, r) => s + (r.blendedScore ?? 0), 0) / n).toFixed(3)),
+      top5: merged.slice(0, 5).map((r) => r.ticker),
+    };
     blended = true;
   }
 
@@ -158,6 +171,7 @@ app.get("/api/scanner", (_req, res) => {
     macroMode: run.macroMode,
     scannerActive: run.macroMode !== "DEFENSIVE",
     blended,
+    summary,
     data: rows.map((r) => {
       // Last close + daily change from the cached series (no extra fetch).
       const s = getCachedSeries(r.ticker);

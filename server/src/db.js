@@ -200,6 +200,34 @@ export function latestFundamentalScores(tickers) {
   return out;
 }
 
+/** Latest analyst detail per ticker (dimensions + notes + score) for the UI. */
+export function getAnalystDetail(tickers) {
+  if (!tickers?.length) return {};
+  const placeholders = tickers.map(() => "?").join(",");
+  const rows = db()
+    .prepare(
+      `SELECT ticker, dimensions_json, fundamental_score, model FROM analyst_scores
+       WHERE ticker IN (${placeholders}) GROUP BY ticker HAVING MAX(computed_at)`,
+    )
+    .all(...tickers);
+  const out = {};
+  for (const r of rows) {
+    let blob = {};
+    try {
+      blob = r.dimensions_json ? JSON.parse(r.dimensions_json) : {};
+    } catch {
+      blob = {};
+    }
+    out[r.ticker] = {
+      dimensions: blob.dimensions ?? null,
+      notes: blob.analyst_notes ?? blob.verdict_plain ?? null,
+      fundamentalScore: r.fundamental_score,
+      model: r.model,
+    };
+  }
+  return out;
+}
+
 export function saveAnalystScore({ ticker, quarterEnd, dimensions, fundamentalScore, model }) {
   db()
     .prepare(
