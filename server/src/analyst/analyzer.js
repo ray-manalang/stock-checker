@@ -4,9 +4,7 @@ import { getAnalystScore, saveAnalystScore } from "../db.js";
 
 /** The fiscal-quarter key a score is cached under. */
 export function quarterEndFor(fundamentals) {
-  const q = fundamentals?.quarters?.[0]?.endDate;
-  if (q) return q;
-  return calendarQuarterEnd();
+  return fundamentals?.quarterEnd ?? calendarQuarterEnd();
 }
 
 function calendarQuarterEnd() {

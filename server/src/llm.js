@@ -170,29 +170,12 @@ function buildDeepDivePrompt({ quote, indicators, fundamentals }) {
   if (i.relativeStrength != null) {
     lines.push(`Relative strength vs SPY (1y): ${fmt(i.relativeStrength, 1)}%`);
   }
-  if (fundamentals) {
-    lines.push("", "Fundamentals (most recent, from Yahoo quoteSummary):");
-    const f = fundamentals;
-    const pct = (v) => (typeof v === "number" ? `${(v * 100).toFixed(1)}%` : "n/a");
+  if (fundamentals?.financials) {
     lines.push(
-      `  Gross margin: ${pct(f.grossMargin)}   Operating margin: ${pct(
-        f.operatingMargin,
-      )}   Profit margin: ${pct(f.profitMargin)}`,
-      `  Revenue growth: ${pct(f.revenueGrowth)}   Earnings growth: ${pct(
-        f.earningsGrowth,
-      )}`,
-      `  Debt/Equity: ${fmt(f.debtToEquity, 1)}   ROE: ${pct(f.returnOnEquity)}`,
+      "",
+      "Fundamentals — last 4 quarters (most recent first), via yfinance:",
+      JSON.stringify(fundamentals.financials, null, 2),
     );
-    if (Array.isArray(f.quarters) && f.quarters.length) {
-      lines.push("  Recent quarters (revenue / net income):");
-      for (const q of f.quarters) {
-        lines.push(
-          `    ${q.endDate ?? "?"}: ${q.totalRevenue ?? "n/a"} / ${
-            q.netIncome ?? "n/a"
-          }`,
-        );
-      }
-    }
   } else {
     lines.push("", "Fundamentals: unavailable — score valuation/quality conservatively.");
   }
@@ -248,23 +231,15 @@ const ANALYST_SYSTEM =
   "one-line analyst_notes. Use ONLY the data provided; do not invent news.";
 
 function analystPrompt({ ticker, fundamentals }) {
-  const f = fundamentals ?? {};
-  const pct = (v) => (typeof v === "number" ? `${(v * 100).toFixed(1)}%` : "n/a");
-  const lines = [
-    `Ticker: ${ticker}`,
-    `Gross margin: ${pct(f.grossMargin)}  Operating margin: ${pct(f.operatingMargin)}  Profit margin: ${pct(f.profitMargin)}`,
-    `Revenue growth: ${pct(f.revenueGrowth)}  Earnings growth: ${pct(f.earningsGrowth)}`,
-    `Debt/Equity: ${typeof f.debtToEquity === "number" ? f.debtToEquity.toFixed(1) : "n/a"}  ROE: ${pct(f.returnOnEquity)}`,
-  ];
-  if (Array.isArray(f.quarters) && f.quarters.length) {
-    lines.push("Recent quarters (end / revenue / net income / operating income):");
-    for (const q of f.quarters) {
-      lines.push(`  ${q.endDate ?? "?"}: ${q.totalRevenue ?? "n/a"} / ${q.netIncome ?? "n/a"} / ${q.operatingIncome ?? "n/a"}`);
-    }
-  } else {
-    lines.push("Quarterly detail unavailable — score conservatively.");
+  const financials = fundamentals?.financials;
+  if (financials) {
+    return (
+      `Please score this company's fundamental quality.\n\n` +
+      `Financial data (last 4 quarters, most recent first):\n` +
+      JSON.stringify(financials, null, 2)
+    );
   }
-  return lines.join("\n");
+  return `Ticker: ${ticker}\nQuarterly financials unavailable — score conservatively.`;
 }
 
 function clampAnalyst(raw) {

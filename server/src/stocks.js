@@ -36,8 +36,6 @@ async function runYf(args, timeoutMs = 60000) {
 }
 
 const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart";
-const YAHOO_QUOTESUMMARY =
-  "https://query1.finance.yahoo.com/v10/finance/quoteSummary";
 
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
@@ -488,53 +486,20 @@ export async function fetchSparkCloses(symbols, range = "1y", { chunkSize = 50 }
 }
 
 /**
- * Fundamentals + short interest via quoteSummary. FRAGILE (may need a
- * crumb/cookie, rate-limits, changes shape). Never throws — returns null on
- * failure so callers can skip/re-weight rather than error.
+ * 4-quarter fundamentals via the yfinance sidecar (income/cashflow/balance
+ * statements + derived ratios). Returns { quarterEnd, financials } or null.
+ * (Yahoo's quoteSummary is TLS-blocked over raw HTTP, so the sidecar is the
+ * only reliable source.)
  */
 export async function fetchFundamentals(ticker) {
-  try {
-    const symbol = normalizeSymbol(ticker);
-    const modules =
-      "defaultKeyStatistics,financialData,incomeStatementHistoryQuarterly";
-    const session = await getYahooSession();
-    const headers = { ...BROWSER_HEADERS };
-    if (session.cookie) headers.Cookie = session.cookie;
-    let url = `${YAHOO_QUOTESUMMARY}/${encodeURIComponent(
-      symbol,
-    )}?modules=${modules}`;
-    if (session.crumb) url += `&crumb=${encodeURIComponent(session.crumb)}`;
-    const res = await fetch(url, { headers });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const r = data?.quoteSummary?.result?.[0];
-    if (!r) return null;
-
-    const num = (v) => (typeof v?.raw === "number" ? v.raw : null);
-    const fd = r.financialData ?? {};
-    const ks = r.defaultKeyStatistics ?? {};
-    const quarters =
-      r.incomeStatementHistoryQuarterly?.incomeStatementHistory ?? [];
-
-    return {
-      shortRatio: num(ks.shortRatio),
-      grossMargin: num(fd.grossMargins),
-      operatingMargin: num(fd.operatingMargins),
-      profitMargin: num(fd.profitMargins),
-      revenueGrowth: num(fd.revenueGrowth),
-      earningsGrowth: num(fd.earningsGrowth),
-      debtToEquity: num(fd.debtToEquity),
-      returnOnEquity: num(fd.returnOnEquity),
-      freeCashflow: num(fd.freeCashflow),
-      quarters: quarters.slice(0, 4).map((qr) => ({
-        endDate: qr.endDate?.fmt ?? null,
-        totalRevenue: num(qr.totalRevenue),
-        netIncome: num(qr.netIncome),
-        operatingIncome: num(qr.operatingIncome),
-        grossProfit: num(qr.grossProfit),
-      })),
-    };
-  } catch {
-    return null;
+  const symbol = normalizeSymbol(ticker);
+  if (yfEnabled()) {
+    try {
+      const r = await runYf(["fundamentals", symbol]);
+      if (r?.financials) return { quarterEnd: r.quarterEnd ?? null, financials: r.financials };
+    } catch (err) {
+      markYfError(err);
+    }
   }
+  return null;
 }
