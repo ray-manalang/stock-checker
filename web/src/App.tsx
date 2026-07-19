@@ -185,7 +185,7 @@ export default function App() {
         </div>
       )}
 
-      <div className="chips" style={{ marginTop: -12, alignItems: "center" }}>
+      <div className="chips" style={{ alignItems: "center" }}>
         <span className="star" style={{ color: "var(--star)", alignSelf: "center", fontSize: 13 }}>
           ★ Watchlist:
         </span>
