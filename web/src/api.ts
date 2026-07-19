@@ -20,6 +20,16 @@ async function jsonOrThrow(res: Response) {
 export async function getWatchlist(): Promise<WatchItem[]> {
   return (await jsonOrThrow(await fetch("/api/watchlist"))).data;
 }
+
+export type WatchQuote = {
+  ticker: string;
+  name: string | null;
+  price: number | null;
+  changePct: number | null;
+};
+export async function getWatchlistQuotes(): Promise<WatchQuote[]> {
+  return (await jsonOrThrow(await fetch("/api/watchlist/quotes"))).data;
+}
 export async function addToWatchlist(ticker: string): Promise<WatchItem[]> {
   return (
     await jsonOrThrow(

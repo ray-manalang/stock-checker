@@ -17,10 +17,13 @@ import {
   removeAlert,
   usageThisMonth,
   getCachedSeries,
+  setCachedSeries,
+  freshSeriesMap,
   recordCheck,
   recentChecks,
   getAnalystDetail,
 } from "./db.js";
+import { fetchSeriesMulti } from "./stocks.js";
 import {
   startScheduler,
   runMacro,
@@ -189,6 +192,43 @@ app.get("/api/scanner", (_req, res) => {
 
 // ---------- watchlist ----------
 app.get("/api/watchlist", (_req, res) => res.json({ data: listWatchlist() }));
+
+// Quotes for the ticker tape: last close + daily change per watched name.
+// Reuses the shared 1y price cache (same entries the scanner/macro fill), and
+// fetches any missing/stale names best-effort.
+app.get("/api/watchlist/quotes", async (_req, res) => {
+  try {
+    const tickers = listWatchlist().map((w) => w.ticker);
+    if (!tickers.length) return res.json({ data: [] });
+    const { fresh, stale } = freshSeriesMap(tickers, 6 * 60 * 60 * 1000);
+    const map = { ...fresh };
+    if (stale.length) {
+      try {
+        const fetched = await fetchSeriesMulti(stale, "1y");
+        for (const [t, series] of Object.entries(fetched)) {
+          setCachedSeries(t, series);
+          map[t] = series;
+        }
+      } catch {
+        /* best-effort — show whatever is cached */
+      }
+    }
+    const data = tickers.map((t) => {
+      const s = map[t] ?? getCachedSeries(t);
+      let price = null;
+      let changePct = null;
+      if (s?.closes?.length) {
+        price = s.closes[s.closes.length - 1];
+        const prev = s.closes[s.closes.length - 2];
+        changePct = prev > 0 ? ((price - prev) / prev) * 100 : null;
+      }
+      return { ticker: t, name: NAMES[t] ?? null, price, changePct };
+    });
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "quotes failed" });
+  }
+});
 
 app.post("/api/watchlist", (req, res) => {
   const ticker = normSym(req.body?.ticker);

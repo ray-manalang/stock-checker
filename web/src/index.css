@@ -115,6 +115,71 @@ input {
   padding: 20px 16px 80px;
 }
 
+/* ---------- watchlist ticker tape (fixed footer) ---------- */
+.tape {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-top: 1px solid var(--hairline-soft);
+  backdrop-filter: blur(6px);
+}
+.tape-track {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  animation: tape-scroll 45s linear infinite;
+  will-change: transform;
+}
+.tape:hover .tape-track {
+  animation-play-state: paused;
+}
+.tape-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 22px;
+  font-size: 13px;
+  border-right: 1px solid var(--hairline-soft);
+}
+.tape-sym {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+.tape-price {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.tape-item .up,
+.tape-item .down {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+@keyframes tape-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tape-track {
+    animation: none;
+  }
+}
+/* Keep page content clear of the fixed tape. */
+body:has(.tape) .page {
+  padding-bottom: 64px;
+}
+
 /* Stack the two insight cards in the single column. */
 .pro-grid {
   display: flex;

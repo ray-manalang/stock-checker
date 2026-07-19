@@ -15,6 +15,7 @@ import { InfoTip } from "./components/InfoTip";
 import { PriceChart } from "./components/PriceChart";
 import { SegmentedControl } from "./components/SegmentedControl";
 import { ProView } from "./ProView";
+import { TickerTape } from "./TickerTape";
 import { GLOSSARY } from "./lib/glossary";
 import { money, num, pct } from "./lib/format";
 
@@ -106,6 +107,7 @@ export default function App() {
   }
 
   return (
+    <>
     <div className={`page${mode === "pro" ? " pro" : ""}`}>
       <nav className="nav">
         <div className="brand">
@@ -279,6 +281,8 @@ export default function App() {
       </div>{/* check-col */}
       </div>{/* pro-dashboard / check-wrap */}
     </div>
+    <TickerTape watchlist={watchlist} />
+    </>
   );
 }
 
