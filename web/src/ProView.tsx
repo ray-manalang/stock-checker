@@ -95,7 +95,7 @@ export function ProView() {
   const [scanner, setScanner] = useState<ScannerEnv | null>(null);
   const [macroReady, setMacroReady] = useState(false);
   const [scanReady, setScanReady] = useState(false);
-  const [refreshing, setRefreshing] = useState<{ macro?: boolean; scanner?: boolean }>({});
+  const [refreshing, setRefreshing] = useState<{ macro?: boolean; scanner?: boolean; analyst?: boolean }>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const liveRef = useRef(true);
 
@@ -136,18 +136,27 @@ export function ProView() {
 
   // Kick a background recompute, then poll the read endpoint until its "as of"
   // stamp changes (or we give up). Scanner can take minutes on first run.
-  async function refresh(layer: "macro" | "scanner") {
-    const prevAsOf = (layer === "macro" ? macro : scanner)?.asOf;
+  async function refresh(layer: "macro" | "scanner" | "analyst") {
+    // Macro & scanner restamp their read endpoint; analyst blends into the
+    // scanner feed, so we poll /api/scanner and watch for the blend to appear.
     const load = layer === "macro" ? loadMacro : loadScanner;
-    // Windows sized to the first-run compute (Twelve Data paces at 8/min).
+    const prevAsOf = (layer === "macro" ? macro : scanner)?.asOf;
+    const alreadyBlended = !!scanner?.blended;
+    // Windows sized to each job (Twelve Data paces at 8/min; analyst uses the
+    // async Message Batch API).
     const attempts = layer === "macro" ? 60 : 80; // ~5 min / ~20 min
+    const interval = layer === "macro" ? 5000 : 15000;
+    const done = (j: (ScannerEnv & Envelope<Macro>) | null) => {
+      if (layer === "analyst") return !alreadyBlended && !!j?.blended;
+      return !!j?.asOf && j.asOf !== prevAsOf;
+    };
     setRefreshing((s) => ({ ...s, [layer]: true }));
     try {
       await refreshLayer(layer);
       for (let i = 0; i < attempts && liveRef.current; i++) {
-        await sleep(layer === "macro" ? 5000 : 15000);
-        const j = await load();
-        if (j?.asOf && j.asOf !== prevAsOf) break;
+        await sleep(interval);
+        const j = (await load()) as (ScannerEnv & Envelope<Macro>) | null;
+        if (done(j)) break;
       }
     } catch {
       /* ignore */
@@ -249,11 +258,22 @@ export function ProView() {
               <span className="subtitle">ranked {agoLabel(scanner?.asOf)}</span>
             )}
             <RefreshBtn onClick={() => refresh("scanner")} busy={!!refreshing.scanner} />
+            <RefreshBtn
+              onClick={() => refresh("analyst")}
+              busy={!!refreshing.analyst}
+              label="Analyst"
+              title="Score fundamentals with Claude and blend into the ranking"
+            />
           </div>
         </div>
         {refreshing.scanner && (
           <div className="insight-foot" style={{ paddingTop: 4 }}>
             Rescanning… this can take a few minutes.
+          </div>
+        )}
+        {refreshing.analyst && (
+          <div className="insight-foot" style={{ paddingTop: 4 }}>
+            Scoring fundamentals with Claude… this can take a few minutes.
           </div>
         )}
         <div className="insight-divider" />
@@ -462,16 +482,26 @@ function AnalystPanel({ row }: { row: ScannerRow }) {
   );
 }
 
-function RefreshBtn({ onClick, busy }: { onClick: () => void; busy: boolean }) {
+function RefreshBtn({
+  onClick,
+  busy,
+  label = "Refresh",
+  title = "Recompute now",
+}: {
+  onClick: () => void;
+  busy: boolean;
+  label?: string;
+  title?: string;
+}) {
   return (
     <button
       className="btn-ghost btn-sm"
       onClick={onClick}
       disabled={busy}
-      title="Recompute now"
+      title={title}
       style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
     >
-      {busy ? <span className="spinner" style={{ width: 13, height: 13 }} /> : "↻"} Refresh
+      {busy ? <span className="spinner" style={{ width: 13, height: 13 }} /> : "↻"} {label}
     </button>
   );
 }

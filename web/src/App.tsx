@@ -18,8 +18,6 @@ import { ProView } from "./ProView";
 import { GLOSSARY } from "./lib/glossary";
 import { money, num, pct } from "./lib/format";
 
-const RECENTS = ["AAPL", "MSFT", "NVDA", "TSLA", "GOOGL", "AMZN"];
-
 function toneClass(t: Tone): string {
   return t;
 }
@@ -155,14 +153,6 @@ export default function App() {
           )}
         </button>
       </form>
-
-      <div className="chips">
-        {RECENTS.map((t) => (
-          <button key={t} className="chip" onClick={() => run(t)} disabled={loading}>
-            {t}
-          </button>
-        ))}
-      </div>
 
       {recent.length > 0 && (
         <div className="chips" style={{ marginTop: -12, alignItems: "center" }}>
