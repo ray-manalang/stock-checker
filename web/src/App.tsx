@@ -117,7 +117,7 @@ export default function App() {
           value={mode}
           onChange={setMode}
           options={[
-            { value: "simple", label: "Simple" },
+            { value: "simple", label: "Basic" },
             { value: "pro", label: "Pro" },
           ]}
         />

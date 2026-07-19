@@ -63,6 +63,39 @@ const DIM_LABELS: Record<string, string> = {
 const dimLabel = (k: string) =>
   DIM_LABELS[k] ?? k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
+// Beginner-friendly explainers for each analyst sub-score (1–10). Aliases map
+// to the same copy so either key form works.
+const DIM_INFO: Record<string, { title: string; text: string }> = {
+  earnings_quality: {
+    title: "Earnings quality",
+    text: "How 'real' the reported profits are — whether actual cash flow backs up the earnings and the accounting looks clean. Higher = more trustworthy numbers.",
+  },
+  growth_trajectory: {
+    title: "Growth",
+    text: "The direction and pace of revenue and profit growth over recent quarters. Higher = faster, steadier growth.",
+  },
+  growth: {
+    title: "Growth",
+    text: "The direction and pace of revenue and profit growth over recent quarters. Higher = faster, steadier growth.",
+  },
+  balance_sheet_health: {
+    title: "Balance sheet",
+    text: "The strength of the company's finances — how much debt it carries versus its cash and equity. Higher = less debt risk.",
+  },
+  balance_sheet: {
+    title: "Balance sheet",
+    text: "The strength of the company's finances — how much debt it carries versus its cash and equity. Higher = less debt risk.",
+  },
+  margin_trends: {
+    title: "Margins",
+    text: "Whether profit margins are expanding or shrinking over time. Higher = margins holding up or improving.",
+  },
+  red_flags: {
+    title: "Red flags (inverted)",
+    text: "Warning signs like ballooning receivables, one-off gains, or cash flow lagging profits. Scored inverted — a higher number means fewer red flags.",
+  },
+};
+
 const ZONE_TONE: Record<string, string> = {
   "FULL DEPLOY": "up",
   REDUCED: "warn",
@@ -445,14 +478,20 @@ function AnalystPanel({ row }: { row: ScannerRow }) {
     >
       {a.dimensions && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 22px", marginBottom: 10 }}>
-          {Object.entries(a.dimensions).map(([k, v]) => (
-            <div key={k}>
-              <div style={{ fontSize: 11, color: "var(--text-3)" }}>{dimLabel(k)}</div>
-              <div style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                {v}/10
+          {Object.entries(a.dimensions).map(([k, v]) => {
+            const info = DIM_INFO[k];
+            return (
+              <div key={k}>
+                <div style={{ fontSize: 11, color: "var(--text-3)" }}>
+                  {dimLabel(k)}{" "}
+                  {info && <InfoTip title={info.title} text={info.text} label={info.title} />}
+                </div>
+                <div style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                  {v}/10
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       <div style={{ fontSize: 13, marginBottom: a.notes ? 8 : 0 }}>
