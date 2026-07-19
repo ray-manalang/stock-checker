@@ -121,6 +121,7 @@ export default function App() {
         />
       </nav>
 
+      <div className={mode === "pro" ? "pro-dashboard" : "check-wrap"}>
       {mode === "pro" && <ProView />}
 
       <div className="check-col">
@@ -276,6 +277,7 @@ export default function App() {
         </div>
       )}
       </div>{/* check-col */}
+      </div>{/* pro-dashboard / check-wrap */}
     </div>
   );
 }

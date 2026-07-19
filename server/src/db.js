@@ -184,6 +184,20 @@ export function getAnalystScore(ticker, quarterEnd, model) {
     .get(ticker, quarterEnd, model);
 }
 
+/**
+ * Most recent cached row for a ticker, ignoring the quarter. Used as a
+ * fallback when fundamentals can't be fetched (so the quarter key is unknown)
+ * to avoid needlessly re-running a paid deep-dive we already have.
+ */
+export function getLatestAnalystScore(ticker) {
+  return db()
+    .prepare(
+      `SELECT * FROM analyst_scores WHERE ticker = ?
+       ORDER BY computed_at DESC LIMIT 1`,
+    )
+    .get(ticker);
+}
+
 /** Latest fundamental score per ticker (any quarter), for the blender. */
 export function latestFundamentalScores(tickers) {
   if (!tickers?.length) return {};

@@ -5,6 +5,7 @@ import { deepDiveTicker, LlmUnavailable, OPUS } from "./llm.js";
 import {
   quarterEndFor,
   getCachedAnalysis,
+  getLatestCachedAnalysis,
   saveAnalysis,
 } from "./analyst/analyzer.js";
 
@@ -44,7 +45,12 @@ export async function analyzeTicker(ticker, { deep = true, fresh = false } = {})
   let llmError = null;
   let cachedFundamentalScore = null;
 
-  const hit = getCachedAnalysis(quote.ticker, quarterEnd);
+  // Cache-first. Prefer an exact quarter match; if fundamentals couldn't be
+  // fetched (so quarterEnd fell back to the calendar quarter and may not match
+  // how a prior deep-dive was keyed — e.g. fiscal-quarter names like WDAY),
+  // fall back to the latest cached deep-dive rather than re-paying Claude.
+  let hit = getCachedAnalysis(quote.ticker, quarterEnd);
+  if (!hit && !fundamentals) hit = getLatestCachedAnalysis(quote.ticker);
   if (hit?.analysis?.signal && !fresh) {
     analysis = hit.analysis; // full deep-dive
     cached = true;

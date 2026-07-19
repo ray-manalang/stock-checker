@@ -1,6 +1,6 @@
 import { fetchFundamentals } from "../stocks.js";
 import { scoreFundamentalsBatch, SONNET } from "../llm.js";
-import { getAnalystScore, saveAnalystScore } from "../db.js";
+import { getAnalystScore, getLatestAnalystScore, saveAnalystScore } from "../db.js";
 
 /** The fiscal-quarter key a score is cached under. */
 export function quarterEndFor(fundamentals) {
@@ -17,9 +17,7 @@ function calendarQuarterEnd() {
   return `${year}-${mm}-${String(lastDay).padStart(2, "0")}`;
 }
 
-/** Read a cached analysis blob for a ticker's current quarter (any model). */
-export function getCachedAnalysis(ticker, quarterEnd) {
-  const row = getAnalystScore(ticker, quarterEnd, null);
+function toAnalysis(row) {
   if (!row) return null;
   try {
     return {
@@ -31,6 +29,20 @@ export function getCachedAnalysis(ticker, quarterEnd) {
   } catch {
     return null;
   }
+}
+
+/** Read a cached analysis blob for a ticker's current quarter (any model). */
+export function getCachedAnalysis(ticker, quarterEnd) {
+  return toAnalysis(getAnalystScore(ticker, quarterEnd, null));
+}
+
+/**
+ * Latest cached analysis for a ticker regardless of quarter. Fallback for when
+ * the current quarter can't be determined (fundamentals fetch failed), so we
+ * serve an existing deep-dive instead of paying for a fresh one.
+ */
+export function getLatestCachedAnalysis(ticker) {
+  return toAnalysis(getLatestAnalystScore(ticker));
 }
 
 /** Persist a full analysis blob (from the Opus deep-dive or Sonnet scorer). */

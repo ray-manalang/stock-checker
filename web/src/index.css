@@ -135,6 +135,42 @@ input {
   }
 }
 
+/* Pro dashboard: three columns — Market conditions | Top-ranked | Stock check.
+   The .pro-grid wrapper collapses (display:contents) so its two cards become
+   grid items of the dashboard alongside the check panel. */
+.page.pro .pro-dashboard {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.page.pro .pro-dashboard > .pro-grid {
+  display: contents;
+}
+.page.pro .pro-dashboard > .pro-grid > .insight-card {
+  margin-bottom: 0;
+}
+/* Check panel becomes the third column (override the centered/narrow layout). */
+.page.pro .pro-dashboard > .check-col {
+  max-width: none;
+  margin: 0;
+}
+@media (max-width: 1080px) {
+  .page.pro .pro-dashboard {
+    grid-template-columns: 1fr 1fr;
+  }
+  .page.pro .pro-dashboard > .check-col {
+    grid-column: 1 / -1;
+    max-width: 720px;
+    margin: 12px auto 0;
+  }
+}
+@media (max-width: 720px) {
+  .page.pro .pro-dashboard {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Group search + recents + watchlist so their rows sit tight and even, instead
    of relying on each row's own bottom margin. */
 .check-col {
