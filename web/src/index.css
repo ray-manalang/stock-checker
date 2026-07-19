@@ -115,60 +115,18 @@ input {
   padding: 20px 16px 80px;
 }
 
-/* Pro: widen the shell into a dashboard so it reads horizontally instead of
-   as one tall column. */
+/* Pro: a single column, just wider than the default so the cards and the check
+   panel have room to breathe (the multi-column dashboard read poorly). */
 .page.pro {
-  max-width: 1360px;
+  max-width: 900px;
 }
 
-/* Two insight cards (Market conditions | Top-ranked) side by side on desktop. */
+/* Stack the two insight cards in the single column. */
 .pro-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
-  align-items: start;
-  margin-bottom: 28px;
-}
-@media (max-width: 900px) {
-  .pro-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Pro dashboard: three columns — Market conditions | Top-ranked | Stock check.
-   The .pro-grid wrapper collapses (display:contents) so its two cards become
-   grid items of the dashboard alongside the check panel. */
-.page.pro .pro-dashboard {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 16px;
-  align-items: start;
-}
-.page.pro .pro-dashboard > .pro-grid {
-  display: contents;
-}
-.page.pro .pro-dashboard > .pro-grid > .insight-card {
-  margin-bottom: 0;
-}
-/* Check panel becomes the third column (override the centered/narrow layout). */
-.page.pro .pro-dashboard > .check-col {
-  max-width: none;
-  margin: 0;
-}
-@media (max-width: 1080px) {
-  .page.pro .pro-dashboard {
-    grid-template-columns: 1fr 1fr;
-  }
-  .page.pro .pro-dashboard > .check-col {
-    grid-column: 1 / -1;
-    max-width: 720px;
-    margin: 12px auto 0;
-  }
-}
-@media (max-width: 720px) {
-  .page.pro .pro-dashboard {
-    grid-template-columns: 1fr;
-  }
+  margin-bottom: 20px;
 }
 
 /* Group search + recents + watchlist so their rows sit tight and even, instead
@@ -186,14 +144,6 @@ input {
 .check-tool .search,
 .check-tool .chips {
   margin-bottom: 0;
-}
-
-/* In Pro, keep the check tool + its result centered and readable beneath the
-   wide dashboard. */
-.page.pro .check-col {
-  width: 100%;
-  max-width: 720px;
-  margin: 0 auto;
 }
 
 .nav {
@@ -246,12 +196,12 @@ input {
   min-width: 0;
   background: var(--surface);
   border: 1px solid var(--hairline);
-  border-radius: 14px;
+  border-radius: 10px;
   color: var(--text);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  padding: 16px 18px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 11px 14px;
   outline: none;
   transition: border-color 0.18s var(--ease);
 }
@@ -290,10 +240,10 @@ input {
   background: var(--pill);
   color: var(--pill-text);
   border: none;
-  border-radius: 999px;
-  padding: 12px 22px;
-  font-weight: 700;
-  font-size: 15px;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-weight: 600;
+  font-size: 14px;
   transition: transform 0.2s var(--ease), opacity 0.2s var(--ease);
 }
 .btn-primary:hover {
