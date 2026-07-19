@@ -1,42 +1,46 @@
 import { useEffect, useRef, useState } from "react";
-import { getWatchlistQuotes, type WatchQuote } from "./api";
+import { getTape, type TapeItem } from "./api";
 
 /**
- * Fixed footer ticker-tape of the user's watchlist — a continuous horizontal
- * marquee of symbol · price · daily change. Stays in view on both Simple and
- * Pro. Hidden entirely when the watchlist is empty.
+ * Fixed footer ticker-tape — a continuous horizontal marquee of the user's
+ * watchlist plus the scanner's current top-ranked names (deduped server-side),
+ * each showing symbol · price · daily change. Watchlist names get a ★. Stays in
+ * view on both Simple and Pro; hidden when there's nothing to show.
  */
 export function TickerTape({ watchlist }: { watchlist: string[] }) {
-  const [quotes, setQuotes] = useState<WatchQuote[]>([]);
+  const [items, setItems] = useState<TapeItem[]>([]);
   const live = useRef(true);
 
+  // Re-pull when the watchlist changes; also poll so scanner updates land.
   const key = watchlist.join(",");
   useEffect(() => {
     live.current = true;
     const load = () =>
-      getWatchlistQuotes()
-        .then((q) => live.current && setQuotes(q))
+      getTape()
+        .then((q) => live.current && setItems(q))
         .catch(() => {});
     load();
-    const id = setInterval(load, 60000); // refresh prices ~1/min
+    const id = setInterval(load, 60000);
     return () => {
       live.current = false;
       clearInterval(id);
     };
   }, [key]);
 
-  if (!watchlist.length || !quotes.length) return null;
+  if (!items.length) return null;
 
-  // Sort alphabetically by ticker, then duplicate so the -50% keyframe loops
-  // seamlessly.
-  const sorted = [...quotes].sort((a, b) => a.ticker.localeCompare(b.ticker));
+  // Sort alphabetically, then duplicate so the -50% keyframe loops seamlessly.
+  const sorted = [...items].sort((a, b) => a.ticker.localeCompare(b.ticker));
   const seq = [...sorted, ...sorted];
+  // Keep per-item speed roughly constant regardless of how many names show.
+  const duration = Math.max(30, sorted.length * 3);
 
   return (
-    <div className="tape" aria-label="Watchlist ticker">
-      <div className="tape-track">
+    <div className="tape" aria-label="Watchlist and top-ranked ticker">
+      <div className="tape-track" style={{ animationDuration: `${duration}s` }}>
         {seq.map((q, i) => (
           <span className="tape-item" key={`${q.ticker}-${i}`}>
+            {q.source === "watch" && <span className="tape-star">★</span>}
             <span className="tape-sym">{q.ticker}</span>
             {q.price != null && (
               <span className="tape-price">

@@ -148,6 +148,11 @@ input {
   font-size: 13px;
   border-right: 1px solid var(--hairline-soft);
 }
+.tape-star {
+  color: var(--star);
+  font-size: 10px;
+  margin-right: -3px;
+}
 .tape-sym {
   font-weight: 700;
   letter-spacing: 0.04em;

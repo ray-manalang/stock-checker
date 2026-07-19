@@ -30,6 +30,11 @@ export type WatchQuote = {
 export async function getWatchlistQuotes(): Promise<WatchQuote[]> {
   return (await jsonOrThrow(await fetch("/api/watchlist/quotes"))).data;
 }
+
+export type TapeItem = WatchQuote & { source: "watch" | "scan" };
+export async function getTape(): Promise<TapeItem[]> {
+  return (await jsonOrThrow(await fetch("/api/tape"))).data;
+}
 export async function addToWatchlist(ticker: string): Promise<WatchItem[]> {
   return (
     await jsonOrThrow(

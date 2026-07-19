@@ -43,6 +43,39 @@ function numOrNull(v) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+// Last close + daily % change from a cached series.
+function priceChangeOf(series) {
+  if (!series?.closes?.length) return { price: null, changePct: null };
+  const price = series.closes[series.closes.length - 1];
+  const prev = series.closes[series.closes.length - 2];
+  const changePct = prev > 0 ? ((price - prev) / prev) * 100 : null;
+  return { price, changePct };
+}
+
+// Quotes for a set of tickers, reusing the shared 1y price cache and fetching
+// any missing/stale names best-effort via the sidecar.
+async function watchlistQuotes(tickers) {
+  if (!tickers.length) return [];
+  const { fresh, stale } = freshSeriesMap(tickers, 6 * 60 * 60 * 1000);
+  const map = { ...fresh };
+  if (stale.length) {
+    try {
+      const fetched = await fetchSeriesMulti(stale, "1y");
+      for (const [t, series] of Object.entries(fetched)) {
+        setCachedSeries(t, series);
+        map[t] = series;
+      }
+    } catch {
+      /* best-effort — show whatever is cached */
+    }
+  }
+  return tickers.map((t) => ({
+    ticker: t,
+    name: NAMES[t] ?? null,
+    ...priceChangeOf(map[t] ?? getCachedSeries(t)),
+  }));
+}
+
 // age in ms beyond which a snapshot is flagged stale
 const MACRO_STALE_MS = 45 * 60 * 1000;
 const SCANNER_STALE_MS = 36 * 60 * 60 * 1000;
@@ -193,40 +226,43 @@ app.get("/api/scanner", (_req, res) => {
 // ---------- watchlist ----------
 app.get("/api/watchlist", (_req, res) => res.json({ data: listWatchlist() }));
 
-// Quotes for the ticker tape: last close + daily change per watched name.
-// Reuses the shared 1y price cache (same entries the scanner/macro fill), and
-// fetches any missing/stale names best-effort.
+// Quotes for the watched names (last close + daily change).
 app.get("/api/watchlist/quotes", async (_req, res) => {
   try {
     const tickers = listWatchlist().map((w) => w.ticker);
-    if (!tickers.length) return res.json({ data: [] });
-    const { fresh, stale } = freshSeriesMap(tickers, 6 * 60 * 60 * 1000);
-    const map = { ...fresh };
-    if (stale.length) {
-      try {
-        const fetched = await fetchSeriesMulti(stale, "1y");
-        for (const [t, series] of Object.entries(fetched)) {
-          setCachedSeries(t, series);
-          map[t] = series;
-        }
-      } catch {
-        /* best-effort — show whatever is cached */
-      }
-    }
-    const data = tickers.map((t) => {
-      const s = map[t] ?? getCachedSeries(t);
-      let price = null;
-      let changePct = null;
-      if (s?.closes?.length) {
-        price = s.closes[s.closes.length - 1];
-        const prev = s.closes[s.closes.length - 2];
-        changePct = prev > 0 ? ((price - prev) / prev) * 100 : null;
-      }
-      return { ticker: t, name: NAMES[t] ?? null, price, changePct };
-    });
-    res.json({ data });
+    res.json({ data: await watchlistQuotes(tickers) });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "quotes failed" });
+  }
+});
+
+// Ticker-tape feed: the watchlist plus the scanner's current top-ranked names,
+// deduped (watchlist wins), each tagged with its source.
+app.get("/api/tape", async (_req, res) => {
+  try {
+    const watchTickers = listWatchlist().map((w) => w.ticker);
+    const items = (await watchlistQuotes(watchTickers)).map((q) => ({
+      ...q,
+      source: "watch",
+    }));
+    const seen = new Set(watchTickers);
+
+    const run = latestScanner();
+    if (run && run.macroMode !== "DEFENSIVE") {
+      for (const r of run.rows.slice(0, 20)) {
+        if (seen.has(r.ticker)) continue;
+        seen.add(r.ticker);
+        items.push({
+          ticker: r.ticker,
+          name: NAMES[r.ticker] ?? null,
+          ...priceChangeOf(getCachedSeries(r.ticker)),
+          source: "scan",
+        });
+      }
+    }
+    res.json({ data: items });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "tape failed" });
   }
 });
 
