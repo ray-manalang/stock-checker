@@ -106,7 +106,7 @@ export default function App() {
   }
 
   return (
-    <div className="page">
+    <div className={`page${mode === "pro" ? " pro" : ""}`}>
       <nav className="nav">
         <div className="brand">
           Market Specialist<span className="dot">.</span>
@@ -123,6 +123,8 @@ export default function App() {
 
       {mode === "pro" && <ProView />}
 
+      <div className="check-col">
+      <div className="check-tool">
       <form className="search" onSubmit={onSubmit}>
         <label htmlFor="ticker" className="sr-only">
           Ticker symbol
@@ -155,7 +157,7 @@ export default function App() {
       </form>
 
       {recent.length > 0 && (
-        <div className="chips" style={{ marginTop: -12, alignItems: "center" }}>
+        <div className="chips" style={{ alignItems: "center" }}>
           <span className="muted" style={{ fontSize: 13, alignSelf: "center" }}>
             Recently checked:
           </span>
@@ -238,6 +240,7 @@ export default function App() {
           )}
         </form>
       </div>
+      </div>{/* check-tool */}
 
       {error && (
         <div className="banner banner-error" role="alert">
@@ -272,6 +275,7 @@ export default function App() {
           {usage.calls === 1 ? "call" : "calls"}
         </div>
       )}
+      </div>{/* check-col */}
     </div>
   );
 }

@@ -172,7 +172,7 @@ export function ProView() {
   const downgrades = rows.filter((r) => r.rankFlag === "downgrade");
 
   return (
-    <>
+    <div className="pro-grid">
       {/* Market conditions */}
       <div className="insight-card">
         <div className="insight-head">
@@ -392,7 +392,7 @@ export function ProView() {
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }
 

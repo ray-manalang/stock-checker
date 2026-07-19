@@ -115,6 +115,51 @@ input {
   padding: 20px 16px 80px;
 }
 
+/* Pro: widen the shell into a dashboard so it reads horizontally instead of
+   as one tall column. */
+.page.pro {
+  max-width: 1360px;
+}
+
+/* Two insight cards (Market conditions | Top-ranked) side by side on desktop. */
+.pro-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 28px;
+}
+@media (max-width: 900px) {
+  .pro-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Group search + recents + watchlist so their rows sit tight and even, instead
+   of relying on each row's own bottom margin. */
+.check-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.check-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.check-tool .search,
+.check-tool .chips {
+  margin-bottom: 0;
+}
+
+/* In Pro, keep the check tool + its result centered and readable beneath the
+   wide dashboard. */
+.page.pro .check-col {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
 .nav {
   display: flex;
   align-items: center;
