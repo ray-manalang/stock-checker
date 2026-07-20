@@ -236,6 +236,54 @@ app.get("/api/watchlist/quotes", async (_req, res) => {
   }
 });
 
+// ---------- CNBC videos (via CNBC Television's YouTube feed) ----------
+const CNBC_YT_CHANNEL = "UCrp_UI8XtuYfpiqluWLD7Lw"; // "CNBC Television"
+let _cnbcVideos = { at: 0, data: [] };
+
+function decodeEntities(s) {
+  return String(s)
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'");
+}
+
+// Minimal parse of a YouTube channel RSS feed → [{ id, title, thumbnail, published }].
+function parseYtFeed(xml) {
+  const out = [];
+  for (const e of xml.split("<entry>").slice(1)) {
+    const id = (e.match(/<yt:videoId>([^<]+)</) || [])[1];
+    const title = (e.match(/<title>([^<]*)</) || [])[1];
+    const thumbnail = (e.match(/<media:thumbnail url="([^"]+)"/) || [])[1] ?? null;
+    const published = (e.match(/<published>([^<]+)</) || [])[1] ?? null;
+    if (id && title) out.push({ id, title: decodeEntities(title), thumbnail, published });
+  }
+  return out;
+}
+
+// Latest CNBC market videos. Cached ~10 min; serves stale on upstream failure.
+app.get("/api/news/videos", async (_req, res) => {
+  const now = Date.now();
+  if (now - _cnbcVideos.at < 10 * 60 * 1000 && _cnbcVideos.data.length) {
+    return res.json({ data: _cnbcVideos.data, cached: true });
+  }
+  try {
+    const r = await fetch(
+      `https://www.youtube.com/feeds/videos.xml?channel_id=${CNBC_YT_CHANNEL}`,
+      { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(12000) },
+    );
+    if (!r.ok) throw new Error(`youtube ${r.status}`);
+    const data = parseYtFeed(await r.text()).slice(0, 12);
+    if (data.length) _cnbcVideos = { at: now, data };
+    res.json({ data: _cnbcVideos.data });
+  } catch (err) {
+    if (_cnbcVideos.data.length) return res.json({ data: _cnbcVideos.data, stale: true });
+    res.status(502).json({ error: err instanceof Error ? err.message : "videos unavailable" });
+  }
+});
+
 // Market indexes pinned at the front of the tape.
 const TAPE_INDEXES = [
   { ticker: "^GSPC", label: "S&P 500" },

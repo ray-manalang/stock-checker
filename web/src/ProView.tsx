@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { InfoTip } from "./components/InfoTip";
+import { CnbcVideos } from "./CnbcVideos";
 import { refreshLayer } from "./api";
 import { GLOSSARY } from "./lib/glossary";
 import { money, num, absChange, type ChangeMode } from "./lib/format";
@@ -444,6 +445,8 @@ export function ProView({
           </div>
         )}
       </div>
+
+      <CnbcVideos />
     </div>
   );
 }

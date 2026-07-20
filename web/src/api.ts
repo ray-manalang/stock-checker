@@ -38,6 +38,16 @@ export type TapeItem = WatchQuote & {
 export async function getTape(): Promise<TapeItem[]> {
   return (await jsonOrThrow(await fetch("/api/tape"))).data;
 }
+
+export type CnbcVideo = {
+  id: string;
+  title: string;
+  thumbnail: string | null;
+  published: string | null;
+};
+export async function getCnbcVideos(): Promise<CnbcVideo[]> {
+  return (await jsonOrThrow(await fetch("/api/news/videos"))).data;
+}
 export async function addToWatchlist(ticker: string): Promise<WatchItem[]> {
   return (
     await jsonOrThrow(
