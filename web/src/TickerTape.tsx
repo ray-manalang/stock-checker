@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getTape, type TapeItem } from "./api";
 import { absChange, type ChangeMode } from "./lib/format";
+import { useLivePrices } from "./livePrices";
 
 /**
  * Fixed footer ticker-tape — a continuous horizontal marquee of the user's
@@ -37,15 +38,23 @@ export function TickerTape({
     };
   }, [key]);
 
-  if (!items.length) return null;
-
   // Indexes pinned first; the rest sorted alphabetically. Duplicate so the
   // -50% keyframe loops seamlessly.
   const indexes = items.filter((q) => q.source === "index");
   const rest = items
     .filter((q) => q.source !== "index")
     .sort((a, b) => a.ticker.localeCompare(b.ticker));
-  const ordered = [...indexes, ...rest];
+  const orderedRaw = [...indexes, ...rest];
+
+  // Overlay live prices from the shared store so the tape stays in sync with
+  // Top-ranked (both read the same source, updated on one timer).
+  const livePx = useLivePrices(orderedRaw.map((o) => o.ticker));
+  const ordered = orderedRaw.map((o) => {
+    const q = livePx[o.ticker];
+    return q && q.price != null ? { ...o, price: q.price, changePct: q.changePct } : o;
+  });
+
+  if (!items.length) return null;
   const seq = [...ordered, ...ordered];
   // Keep per-item speed roughly constant regardless of how many names show.
   const duration = Math.max(30, ordered.length * 3);

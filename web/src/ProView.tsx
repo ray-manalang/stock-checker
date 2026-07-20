@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { InfoTip } from "./components/InfoTip";
 import { CnbcVideos } from "./CnbcVideos";
+import { useLivePrices } from "./livePrices";
 import { refreshLayer } from "./api";
 import { GLOSSARY } from "./lib/glossary";
 import { money, num, absChange, type ChangeMode } from "./lib/format";
@@ -208,6 +209,8 @@ export function ProView({
   const m = macro?.data;
   const rows = scanner?.data ?? [];
   const summary = scanner?.summary ?? null;
+  // Live prices from the shared store so Top-ranked stays in sync with the tape.
+  const livePx = useLivePrices(rows.map((r) => r.ticker));
   const upgrades = rows.filter((r) => r.rankFlag === "upgrade");
   const downgrades = rows.filter((r) => r.rankFlag === "downgrade");
 
@@ -365,6 +368,10 @@ export function ProView({
             {rows.slice(0, 20).map((r) => {
               const hasDetail = !!r.analyst;
               const open = expanded.has(r.ticker);
+              // Prefer the shared live price (keeps this in sync with the tape).
+              const lq = livePx[r.ticker];
+              const price = lq?.price ?? r.price;
+              const changePct = lq?.changePct ?? r.changePct;
               return (
                 <div key={r.ticker}>
                   <div
@@ -403,21 +410,21 @@ export function ProView({
                       {r.name && <span className="s-sub">{r.name}</span>}
                     </span>
                     <span className="s-meta">
-                      <span className="s-px">{money(r.price, "USD")}</span>
-                      {r.changePct != null ? (
+                      <span className="s-px">{money(price, "USD")}</span>
+                      {changePct != null ? (
                         <button
-                          className={`s-chg s-chg-toggle ${r.changePct >= 0 ? "up" : "down"}`}
+                          className={`s-chg s-chg-toggle ${changePct >= 0 ? "up" : "down"}`}
                           title="Toggle percent / dollar change"
                           onClick={(e) => {
                             e.stopPropagation();
                             onToggleChangeMode();
                           }}
                         >
-                          {r.changePct >= 0 ? "▲" : "▼"}{" "}
+                          {changePct >= 0 ? "▲" : "▼"}{" "}
                           {changeMode === "pct"
-                            ? `${Math.abs(r.changePct).toFixed(2)}%`
+                            ? `${Math.abs(changePct).toFixed(2)}%`
                             : (() => {
-                                const a = absChange(r.price, r.changePct);
+                                const a = absChange(price, changePct);
                                 return a == null ? "—" : Math.abs(a).toFixed(2);
                               })()}
                         </button>
