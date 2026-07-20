@@ -7,10 +7,10 @@ import {
   createAlert,
   getUsage,
   getRecentChecks,
-  getQuotes,
   type Usage,
   type RecentCheck,
 } from "./api";
+import { useLivePrices } from "./livePrices";
 import type { CheckResponse, Tone, Word } from "./types";
 import { InfoTip } from "./components/InfoTip";
 import { PriceChart } from "./components/PriceChart";
@@ -62,31 +62,6 @@ export default function App() {
   useEffect(() => {
     if (data) refreshUsage();
   }, [data]);
-
-  // Live-refresh the checked stock's price every minute (no page reload).
-  const activeTicker = data?.quote.ticker;
-  useEffect(() => {
-    if (!activeTicker) return;
-    let live = true;
-    const tick = async () => {
-      try {
-        const q = (await getQuotes([activeTicker]))[activeTicker];
-        if (!live || !q || q.price == null) return;
-        setData((d) =>
-          d && d.quote.ticker === activeTicker
-            ? { ...d, quote: { ...d.quote, price: q.price!, changePct: q.changePct } }
-            : d,
-        );
-      } catch {
-        /* ignore */
-      }
-    };
-    const id = setInterval(tick, 60000);
-    return () => {
-      live = false;
-      clearInterval(id);
-    };
-  }, [activeTicker]);
 
   async function toggleWatch(sym: string) {
     const symbol = sym.toUpperCase();
@@ -353,7 +328,11 @@ function AnswerCard({
   onToggleChangeMode: () => void;
 }) {
   const { quote, verdict, glance, indicators, buyZone, analysis } = data;
-  const changeUp = (quote.changePct ?? 0) >= 0;
+  // Live price from the shared store so the card stays in sync with the tape.
+  const lq = useLivePrices([quote.ticker])[quote.ticker];
+  const price = lq?.price ?? quote.price;
+  const changePct = lq?.changePct ?? quote.changePct;
+  const changeUp = (changePct ?? 0) >= 0;
   const rangePct = indicators.pctOfRange ?? 50;
 
   const [alertOpen, setAlertOpen] = useState(false);
@@ -387,16 +366,16 @@ function AnswerCard({
             <div className="name">{quote.name}</div>
           </div>
           <div className="answer-price">
-            <span className="px">{money(quote.price, quote.currency)}</span>
-            {quote.changePct != null && (
+            <span className="px">{money(price, quote.currency)}</span>
+            {changePct != null && (
               <button
                 className={`chg chg-toggle ${changeUp ? "up" : "down"}`}
                 onClick={onToggleChangeMode}
                 title="Toggle percent / dollar change"
               >
                 {changeMode === "pct"
-                  ? pct(quote.changePct)
-                  : pointStr(quote.price, quote.changePct, quote.currency)}
+                  ? pct(changePct)
+                  : pointStr(price, changePct, quote.currency)}
               </button>
             )}
           </div>
