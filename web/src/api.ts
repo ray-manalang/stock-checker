@@ -52,8 +52,9 @@ export type CnbcVideo = {
   thumbnail: string | null;
   published: string | null;
 };
-export async function getCnbcVideos(): Promise<CnbcVideo[]> {
-  return (await jsonOrThrow(await fetch("/api/news/videos"))).data;
+export async function getCnbcVideos(force = false): Promise<CnbcVideo[]> {
+  const url = force ? "/api/news/videos?force=1" : "/api/news/videos";
+  return (await jsonOrThrow(await fetch(url))).data;
 }
 export async function addToWatchlist(ticker: string): Promise<WatchItem[]> {
   return (

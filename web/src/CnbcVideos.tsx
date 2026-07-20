@@ -17,21 +17,32 @@ function ago(iso: string | null): string {
 export function CnbcVideos() {
   const [videos, setVideos] = useState<CnbcVideo[]>([]);
   const [active, setActive] = useState<CnbcVideo | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const live = useRef(true);
+
+  const load = (force = false) =>
+    getCnbcVideos(force)
+      .then((v) => live.current && setVideos(v))
+      .catch(() => {});
 
   useEffect(() => {
     live.current = true;
-    const load = () =>
-      getCnbcVideos()
-        .then((v) => live.current && setVideos(v))
-        .catch(() => {});
     load();
-    const id = setInterval(load, 10 * 60 * 1000); // refresh ~every 10 min
+    const id = setInterval(() => load(), 5 * 60 * 1000); // refresh ~every 5 min
     return () => {
       live.current = false;
       clearInterval(id);
     };
   }, []);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      await load(true);
+    } finally {
+      if (live.current) setRefreshing(false);
+    }
+  };
 
   if (!videos.length) return null;
 
@@ -42,11 +53,27 @@ export function CnbcVideos() {
           <h3>Latest from CNBC</h3>
           <div className="subtitle">Market video from CNBC Television.</div>
         </div>
-        {active && (
-          <button className="btn-ghost btn-sm" onClick={() => setActive(null)}>
-            ✕ Close
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {active && (
+            <button className="btn-ghost btn-sm" onClick={() => setActive(null)}>
+              ✕ Close
+            </button>
+          )}
+          <button
+            className="btn-ghost btn-sm"
+            onClick={refresh}
+            disabled={refreshing}
+            title="Fetch the latest CNBC videos now"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            {refreshing ? (
+              <span className="spinner" style={{ width: 13, height: 13 }} />
+            ) : (
+              "↻"
+            )}{" "}
+            Refresh
           </button>
-        )}
+        </div>
       </div>
       <div className="insight-divider" />
 

@@ -271,10 +271,12 @@ function parseYtFeed(xml) {
   return out;
 }
 
-// Latest CNBC market videos. Cached ~10 min; serves stale on upstream failure.
-app.get("/api/news/videos", async (_req, res) => {
+// Latest CNBC market videos. Cached ~5 min; serves stale on upstream failure.
+// `?force=1` bypasses the cache (used by the card's manual refresh).
+app.get("/api/news/videos", async (req, res) => {
   const now = Date.now();
-  if (now - _cnbcVideos.at < 10 * 60 * 1000 && _cnbcVideos.data.length) {
+  const force = req.query.force === "1" || req.query.force === "true";
+  if (!force && now - _cnbcVideos.at < 5 * 60 * 1000 && _cnbcVideos.data.length) {
     return res.json({ data: _cnbcVideos.data, cached: true });
   }
   try {
