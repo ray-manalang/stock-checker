@@ -23,7 +23,7 @@ import {
   recentChecks,
   getAnalystDetail,
 } from "./db.js";
-import { fetchSeriesMulti } from "./stocks.js";
+import { fetchSeriesMulti, liveQuotes } from "./stocks.js";
 import {
   startScheduler,
   runMacro,
@@ -164,7 +164,7 @@ app.get("/api/macro", (_req, res) => {
 // L2 scanner — reads the latest nightly ranking; gated OFF when DEFENSIVE.
 // When cached L3 analyst scores exist, blends them in (60/40) and flags
 // upgrades/downgrades.
-app.get("/api/scanner", (_req, res) => {
+app.get("/api/scanner", async (_req, res) => {
   const run = latestScanner();
   if (!run) return res.status(200).json({ data: null, asOf: null, stale: true });
   const age = Date.now() - new Date(run.computedAt).getTime();
@@ -201,6 +201,10 @@ app.get("/api/scanner", (_req, res) => {
     blended = true;
   }
 
+  // Live prices (cached ~60s) so the ranking updates each minute; fall back to
+  // the cached daily series when a live quote isn't available.
+  const live = await liveQuotes(rows.map((r) => r.ticker));
+
   res.json({
     asOf: run.computedAt,
     stale: age > SCANNER_STALE_MS,
@@ -209,14 +213,18 @@ app.get("/api/scanner", (_req, res) => {
     blended,
     summary,
     data: rows.map((r) => {
-      // Last close + daily change from the cached series (no extra fetch).
-      const s = getCachedSeries(r.ticker);
       let price = null;
       let changePct = null;
+      const s = getCachedSeries(r.ticker);
       if (s?.closes?.length) {
         price = s.closes[s.closes.length - 1];
         const prev = s.closes[s.closes.length - 2];
         changePct = prev > 0 ? ((price - prev) / prev) * 100 : null;
+      }
+      const l = live[r.ticker];
+      if (l && l.price != null) {
+        price = l.price;
+        changePct = l.changePct;
       }
       return { ...r, name: NAMES[r.ticker] ?? null, price, changePct };
     }),
@@ -322,9 +330,31 @@ app.get("/api/tape", async (_req, res) => {
         });
       }
     }
-    res.json({ data: [...indexItems, ...items] });
+
+    // Overlay live prices (cached ~60s) so the tape updates each minute.
+    const all = [...indexItems, ...items];
+    const live = await liveQuotes(all.map((i) => i.ticker));
+    const data = all.map((i) => {
+      const l = live[i.ticker];
+      return l && l.price != null ? { ...i, price: l.price, changePct: l.changePct } : i;
+    });
+    res.json({ data });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "tape failed" });
+  }
+});
+
+// Live quotes for an explicit set of symbols (used by the check card's minute
+// refresh). `?symbols=AAPL,MSFT`.
+app.get("/api/quotes", async (req, res) => {
+  try {
+    const symbols = String(req.query.symbols ?? "")
+      .split(",")
+      .map((s) => normSym(s))
+      .filter(Boolean);
+    res.json({ data: symbols.length ? await liveQuotes(symbols) : {} });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "quotes failed" });
   }
 });
 

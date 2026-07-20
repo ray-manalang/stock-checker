@@ -39,6 +39,13 @@ export async function getTape(): Promise<TapeItem[]> {
   return (await jsonOrThrow(await fetch("/api/tape"))).data;
 }
 
+export type Quote = { price: number | null; changePct: number | null };
+export async function getQuotes(symbols: string[]): Promise<Record<string, Quote>> {
+  if (!symbols.length) return {};
+  const qs = encodeURIComponent(symbols.join(","));
+  return (await jsonOrThrow(await fetch(`/api/quotes?symbols=${qs}`))).data;
+}
+
 export type CnbcVideo = {
   id: string;
   title: string;

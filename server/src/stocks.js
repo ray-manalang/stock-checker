@@ -491,6 +491,39 @@ export async function fetchSparkCloses(symbols, range = "1y", { chunkSize = 50 }
  * (Yahoo's quoteSummary is TLS-blocked over raw HTTP, so the sidecar is the
  * only reliable source.)
  */
+// Live last price + daily % change for a batch of symbols, cached ~60s per
+// symbol so the minute-refresh across tape/scanner/card shares one fetch.
+const _quoteCache = new Map(); // symbol -> { at, price, changePct }
+const QUOTE_TTL_MS = 60_000;
+
+export async function liveQuotes(symbols) {
+  const now = Date.now();
+  const out = {};
+  const need = [];
+  for (const s of symbols) {
+    const c = _quoteCache.get(s);
+    if (c && now - c.at < QUOTE_TTL_MS) out[s] = { price: c.price, changePct: c.changePct };
+    else if (!need.includes(s)) need.push(s);
+  }
+  if (need.length && yfEnabled()) {
+    try {
+      const r = await runYf(["quote", ...need]);
+      for (const s of need) {
+        const q = r?.[s];
+        if (q && q.price != null) {
+          const prev = q.prevClose;
+          const changePct = prev > 0 ? ((q.price - prev) / prev) * 100 : null;
+          _quoteCache.set(s, { at: now, price: q.price, changePct });
+          out[s] = { price: q.price, changePct };
+        }
+      }
+    } catch (err) {
+      markYfError(err);
+    }
+  }
+  return out;
+}
+
 export async function fetchFundamentals(ticker) {
   const symbol = normalizeSymbol(ticker);
   if (yfEnabled()) {

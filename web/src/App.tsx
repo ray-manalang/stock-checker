@@ -7,6 +7,7 @@ import {
   createAlert,
   getUsage,
   getRecentChecks,
+  getQuotes,
   type Usage,
   type RecentCheck,
 } from "./api";
@@ -61,6 +62,31 @@ export default function App() {
   useEffect(() => {
     if (data) refreshUsage();
   }, [data]);
+
+  // Live-refresh the checked stock's price every minute (no page reload).
+  const activeTicker = data?.quote.ticker;
+  useEffect(() => {
+    if (!activeTicker) return;
+    let live = true;
+    const tick = async () => {
+      try {
+        const q = (await getQuotes([activeTicker]))[activeTicker];
+        if (!live || !q || q.price == null) return;
+        setData((d) =>
+          d && d.quote.ticker === activeTicker
+            ? { ...d, quote: { ...d.quote, price: q.price!, changePct: q.changePct } }
+            : d,
+        );
+      } catch {
+        /* ignore */
+      }
+    };
+    const id = setInterval(tick, 60000);
+    return () => {
+      live = false;
+      clearInterval(id);
+    };
+  }, [activeTicker]);
 
   async function toggleWatch(sym: string) {
     const symbol = sym.toUpperCase();

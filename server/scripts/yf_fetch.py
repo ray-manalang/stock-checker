@@ -112,6 +112,37 @@ def cmd_multi(period, symbols):
     return out
 
 
+def cmd_quote(symbols):
+    """Fast last price + previous close per symbol (for live minute updates)."""
+    import yfinance as yf
+
+    data = yf.download(
+        symbols,
+        period="5d",
+        interval="1d",
+        auto_adjust=True,
+        group_by="ticker",
+        threads=True,
+        progress=False,
+    )
+    out = {}
+    single = len(symbols) == 1
+    for sym in symbols:
+        try:
+            close = data["Close"] if single else data[sym]["Close"]
+            close = close[close.notna()]
+            if close.empty:
+                out[sym] = None
+                continue
+            vals = [float(x) for x in close.tolist()]
+            price = vals[-1]
+            prev = vals[-2] if len(vals) > 1 else price
+            out[sym] = {"price": price, "prevClose": prev}
+        except Exception:
+            out[sym] = None
+    return out
+
+
 def cmd_fundamentals(symbol):
     """4 quarters of financials + derived ratios (ported from the old analyzer)."""
     import yfinance as yf
@@ -209,6 +240,11 @@ def main():
         if not symbols:
             raise SystemExit("multi: no symbols")
         result = cmd_multi(period_map.get(rng, "1y"), symbols)
+    elif mode == "quote":
+        symbols = sys.argv[2:]
+        if not symbols:
+            raise SystemExit("quote: no symbols")
+        result = cmd_quote(symbols)
     elif mode == "fundamentals":
         result = cmd_fundamentals(sys.argv[2])
     else:
