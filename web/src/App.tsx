@@ -17,7 +17,7 @@ import { SegmentedControl } from "./components/SegmentedControl";
 import { ProView } from "./ProView";
 import { TickerTape } from "./TickerTape";
 import { GLOSSARY } from "./lib/glossary";
-import { money, num, pct } from "./lib/format";
+import { money, num, pct, pointStr, type ChangeMode } from "./lib/format";
 
 function toneClass(t: Tone): string {
   return t;
@@ -33,6 +33,17 @@ export default function App() {
   const [watchInput, setWatchInput] = useState("");
   const [usage, setUsage] = useState<Usage | null>(null);
   const [recent, setRecent] = useState<RecentCheck[]>([]);
+  // Show daily change as percent or dollar/point — persisted, shared by the
+  // analysis card and the ticker tape.
+  const [changeMode, setChangeMode] = useState<ChangeMode>(() =>
+    localStorage.getItem("changeMode") === "abs" ? "abs" : "pct",
+  );
+  const toggleChangeMode = () =>
+    setChangeMode((m) => {
+      const next = m === "pct" ? "abs" : "pct";
+      localStorage.setItem("changeMode", next);
+      return next;
+    });
 
   const refreshRecent = () => getRecentChecks().then(setRecent).catch(() => {});
   useEffect(() => {
@@ -266,6 +277,8 @@ export default function App() {
           watched={watchlist.includes(data.quote.ticker)}
           onToggleWatch={() => toggleWatch(data.quote.ticker)}
           onCreateAlert={(price) => makeAlert(data.quote.ticker, price)}
+          changeMode={changeMode}
+          onToggleChangeMode={toggleChangeMode}
         />
       )}
 
@@ -281,7 +294,11 @@ export default function App() {
       </div>{/* check-col */}
       </div>{/* pro-dashboard / check-wrap */}
     </div>
-    <TickerTape watchlist={watchlist} />
+    <TickerTape
+      watchlist={watchlist}
+      changeMode={changeMode}
+      onToggleChangeMode={toggleChangeMode}
+    />
     </>
   );
 }
@@ -294,6 +311,8 @@ function AnswerCard({
   watched,
   onToggleWatch,
   onCreateAlert,
+  changeMode,
+  onToggleChangeMode,
 }: {
   data: CheckResponse;
   onRefresh: () => void;
@@ -302,6 +321,8 @@ function AnswerCard({
   watched: boolean;
   onToggleWatch: () => void;
   onCreateAlert: (price: number) => Promise<boolean>;
+  changeMode: ChangeMode;
+  onToggleChangeMode: () => void;
 }) {
   const { quote, verdict, glance, indicators, buyZone, analysis } = data;
   const changeUp = (quote.changePct ?? 0) >= 0;
@@ -326,15 +347,29 @@ function AnswerCard({
       <section className="answer">
         <div className="answer-head">
           <div>
-            <div className="ticker">{quote.ticker}</div>
+            <a
+              className="ticker ticker-link"
+              href={`https://finance.yahoo.com/quote/${encodeURIComponent(quote.ticker)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Open ${quote.ticker} on Yahoo Finance`}
+            >
+              {quote.ticker}
+            </a>
             <div className="name">{quote.name}</div>
           </div>
           <div className="answer-price">
             <span className="px">{money(quote.price, quote.currency)}</span>
             {quote.changePct != null && (
-              <span className={`chg ${changeUp ? "up" : "down"}`}>
-                {pct(quote.changePct)}
-              </span>
+              <button
+                className={`chg chg-toggle ${changeUp ? "up" : "down"}`}
+                onClick={onToggleChangeMode}
+                title="Toggle percent / dollar change"
+              >
+                {changeMode === "pct"
+                  ? pct(quote.changePct)
+                  : pointStr(quote.price, quote.changePct, quote.currency)}
+              </button>
             )}
           </div>
         </div>
