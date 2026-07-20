@@ -39,11 +39,19 @@ export function TickerTape({
 
   if (!items.length) return null;
 
-  // Sort alphabetically, then duplicate so the -50% keyframe loops seamlessly.
-  const sorted = [...items].sort((a, b) => a.ticker.localeCompare(b.ticker));
-  const seq = [...sorted, ...sorted];
+  // Indexes pinned first; the rest sorted alphabetically. Duplicate so the
+  // -50% keyframe loops seamlessly.
+  const indexes = items.filter((q) => q.source === "index");
+  const rest = items
+    .filter((q) => q.source !== "index")
+    .sort((a, b) => a.ticker.localeCompare(b.ticker));
+  const ordered = [...indexes, ...rest];
+  const seq = [...ordered, ...ordered];
   // Keep per-item speed roughly constant regardless of how many names show.
-  const duration = Math.max(30, sorted.length * 3);
+  const duration = Math.max(30, ordered.length * 3);
+
+  const yahoo = (symbol: string) =>
+    `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}`;
 
   const changeText = (q: TapeItem): string | null => {
     if (q.changePct == null) return null;
@@ -67,7 +75,15 @@ export function TickerTape({
           return (
             <span className="tape-item" key={`${q.ticker}-${i}`}>
               {q.source === "watch" && <span className="tape-star">★</span>}
-              <span className="tape-sym">{q.ticker}</span>
+              <a
+                className="tape-sym"
+                href={yahoo(q.ticker)}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Open ${q.label ?? q.ticker} on Yahoo Finance`}
+              >
+                {q.label ?? q.ticker}
+              </a>
               {q.price != null && (
                 <span className="tape-price">
                   {q.price.toLocaleString(undefined, {

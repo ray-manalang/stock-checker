@@ -31,7 +31,10 @@ export async function getWatchlistQuotes(): Promise<WatchQuote[]> {
   return (await jsonOrThrow(await fetch("/api/watchlist/quotes"))).data;
 }
 
-export type TapeItem = WatchQuote & { source: "watch" | "scan" };
+export type TapeItem = WatchQuote & {
+  source: "watch" | "scan" | "index";
+  label?: string;
+};
 export async function getTape(): Promise<TapeItem[]> {
   return (await jsonOrThrow(await fetch("/api/tape"))).data;
 }

@@ -236,10 +236,24 @@ app.get("/api/watchlist/quotes", async (_req, res) => {
   }
 });
 
-// Ticker-tape feed: the watchlist plus the scanner's current top-ranked names,
-// deduped (watchlist wins), each tagged with its source.
+// Market indexes pinned at the front of the tape.
+const TAPE_INDEXES = [
+  { ticker: "^GSPC", label: "S&P 500" },
+  { ticker: "^IXIC", label: "Nasdaq" },
+];
+
+// Ticker-tape feed: market indexes, then the watchlist, then the scanner's
+// current top-ranked names (deduped, watchlist wins), each tagged with source.
 app.get("/api/tape", async (_req, res) => {
   try {
+    // Indexes (pinned first).
+    const idxLabel = Object.fromEntries(TAPE_INDEXES.map((i) => [i.ticker, i.label]));
+    const indexItems = (await watchlistQuotes(TAPE_INDEXES.map((i) => i.ticker))).map((q) => ({
+      ...q,
+      label: idxLabel[q.ticker],
+      source: "index",
+    }));
+
     const watchTickers = listWatchlist().map((w) => w.ticker);
     const items = (await watchlistQuotes(watchTickers)).map((q) => ({
       ...q,
@@ -260,7 +274,7 @@ app.get("/api/tape", async (_req, res) => {
         });
       }
     }
-    res.json({ data: items });
+    res.json({ data: [...indexItems, ...items] });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "tape failed" });
   }

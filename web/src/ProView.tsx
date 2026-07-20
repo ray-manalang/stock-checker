@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { InfoTip } from "./components/InfoTip";
 import { refreshLayer } from "./api";
 import { GLOSSARY } from "./lib/glossary";
-import { money, num } from "./lib/format";
+import { money, num, absChange, type ChangeMode } from "./lib/format";
 
 type Envelope<T> = { data: T; asOf: string; stale?: boolean };
 type BlendSummary = {
@@ -123,7 +123,13 @@ function agoLabel(iso?: string): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export function ProView() {
+export function ProView({
+  changeMode,
+  onToggleChangeMode,
+}: {
+  changeMode: ChangeMode;
+  onToggleChangeMode: () => void;
+}) {
   const [macro, setMacro] = useState<Envelope<Macro> | null>(null);
   const [scanner, setScanner] = useState<ScannerEnv | null>(null);
   const [macroReady, setMacroReady] = useState(false);
@@ -398,9 +404,22 @@ export function ProView() {
                     <span className="s-meta">
                       <span className="s-px">{money(r.price, "USD")}</span>
                       {r.changePct != null ? (
-                        <span className={`s-chg ${r.changePct >= 0 ? "up" : "down"}`}>
-                          {r.changePct >= 0 ? "▲" : "▼"} {Math.abs(r.changePct).toFixed(2)}%
-                        </span>
+                        <button
+                          className={`s-chg s-chg-toggle ${r.changePct >= 0 ? "up" : "down"}`}
+                          title="Toggle percent / dollar change"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleChangeMode();
+                          }}
+                        >
+                          {r.changePct >= 0 ? "▲" : "▼"}{" "}
+                          {changeMode === "pct"
+                            ? `${Math.abs(r.changePct).toFixed(2)}%`
+                            : (() => {
+                                const a = absChange(r.price, r.changePct);
+                                return a == null ? "—" : Math.abs(a).toFixed(2);
+                              })()}
+                        </button>
                       ) : (
                         <span className="s-chg" style={{ color: "var(--text-3)" }}>
                           score {num(r.composite, 0)}

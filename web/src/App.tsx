@@ -135,7 +135,9 @@ export default function App() {
       </nav>
 
       <div className={mode === "pro" ? "pro-dashboard" : "check-wrap"}>
-      {mode === "pro" && <ProView />}
+      {mode === "pro" && (
+        <ProView changeMode={changeMode} onToggleChangeMode={toggleChangeMode} />
+      )}
 
       <div className="check-col">
       <div className="check-tool">
