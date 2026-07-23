@@ -141,12 +141,21 @@ export function ProView({
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("scannerCollapsed") === "1",
   );
+  const [macroCollapsed, setMacroCollapsed] = useState(
+    () => localStorage.getItem("macroCollapsed") === "1",
+  );
   const liveRef = useRef(true);
 
   const toggleCollapsed = () =>
     setCollapsed((c) => {
       const next = !c;
       localStorage.setItem("scannerCollapsed", next ? "1" : "0");
+      return next;
+    });
+  const toggleMacroCollapsed = () =>
+    setMacroCollapsed((c) => {
+      const next = !c;
+      localStorage.setItem("macroCollapsed", next ? "1" : "0");
       return next;
     });
 
@@ -229,13 +238,23 @@ export function ProView({
       {/* Market conditions */}
       <div className="insight-card">
         <div className="insight-head">
-          <div>
-            <h3>
-              Market conditions{" "}
-              <InfoTip title={GLOSSARY.macro.title} text={GLOSSARY.macro.text} label="market conditions" />
-            </h3>
-            <div className="subtitle">
-              {m ? m.oneLiner : "The macro gate scores the whole market's risk backdrop."}
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+            <button
+              className="collapse-btn"
+              onClick={toggleMacroCollapsed}
+              aria-expanded={!macroCollapsed}
+              title={macroCollapsed ? "Expand" : "Collapse"}
+            >
+              <span className="chev">{macroCollapsed ? "▸" : "▾"}</span>
+            </button>
+            <div>
+              <h3>
+                Market conditions{" "}
+                <InfoTip title={GLOSSARY.macro.title} text={GLOSSARY.macro.text} label="market conditions" />
+              </h3>
+              <div className="subtitle">
+                {m ? m.oneLiner : "The macro gate scores the whole market's risk backdrop."}
+              </div>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -243,6 +262,8 @@ export function ProView({
             <RefreshBtn onClick={() => refresh("macro")} busy={!!refreshing.macro} />
           </div>
         </div>
+        {!macroCollapsed && (
+          <>
         <div className="insight-divider" />
         {m ? (
           <>
@@ -296,6 +317,8 @@ export function ProView({
                 : "No reading yet — hit Refresh to score market conditions."
               : "Loading…"}
           </div>
+        )}
+          </>
         )}
       </div>
 
