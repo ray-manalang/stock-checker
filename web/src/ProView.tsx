@@ -138,7 +138,17 @@ export function ProView({
   const [scanReady, setScanReady] = useState(false);
   const [refreshing, setRefreshing] = useState<{ macro?: boolean; scanner?: boolean; analyst?: boolean }>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem("scannerCollapsed") === "1",
+  );
   const liveRef = useRef(true);
+
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      localStorage.setItem("scannerCollapsed", next ? "1" : "0");
+      return next;
+    });
 
   const toggleRow = (ticker: string) =>
     setExpanded((prev) => {
@@ -292,10 +302,18 @@ export function ProView({
       {/* Top-ranked stocks */}
       <div className="insight-card">
         <div className="insight-head">
-          <div>
-            <h3>Top-ranked stocks</h3>
-            <div className="subtitle">Quant scanner across the largest US names.</div>
-          </div>
+          <button
+            className="collapse-btn"
+            onClick={toggleCollapsed}
+            aria-expanded={!collapsed}
+            title={collapsed ? "Expand" : "Collapse"}
+          >
+            <span className="chev">{collapsed ? "▸" : "▾"}</span>
+            <span>
+              <h3>Top-ranked stocks</h3>
+              <div className="subtitle">Quant scanner across the largest US names.</div>
+            </span>
+          </button>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {rows.length > 0 && (
               <span className="subtitle">ranked {agoLabel(scanner?.asOf)}</span>
@@ -309,6 +327,8 @@ export function ProView({
             />
           </div>
         </div>
+        {!collapsed && (
+          <>
         {refreshing.scanner && (
           <div className="insight-foot" style={{ paddingTop: 4 }}>
             Rescanning… this can take a few minutes.
@@ -450,6 +470,8 @@ export function ProView({
                   : "No ranking yet — hit Refresh to run the scanner."
               : "Loading…"}
           </div>
+        )}
+          </>
         )}
       </div>
 
