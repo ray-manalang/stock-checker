@@ -26,11 +26,15 @@ function asOfLabel(iso: string | null): string {
 // gain/loss, tax-loss + add-on-dip notes, and the per-position tax-advantaged
 // toggle. All arithmetic on top of the existing ticker-level verdict — holdings
 // never leave the box.
+type HoldingsFilter = "all" | "gainers" | "losers" | "taxloss";
+
 export function HoldingsPage({ onBack }: { onBack: () => void }) {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [macro, setMacro] = useState<{ zone: string; sizingPct: number | null } | null>(null);
   const [ready, setReady] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<HoldingsFilter>("all");
 
   const load = () =>
     getHoldings()
@@ -81,7 +85,11 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
               : "Import a positions CSV to get started."}
           </div>
         </div>
-        <button className="btn-ghost btn-sm" onClick={() => setImporting((v) => !v)}>
+        <button
+          className="btn-ghost btn-sm"
+          onClick={() => setImporting((v) => !v)}
+          style={{ whiteSpace: "nowrap", flexShrink: 0 }}
+        >
           ↻ Import positions
         </button>
       </div>
@@ -102,12 +110,12 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
             <div className="insight-cells">
               <div className="insight-cell">
                 <div className="label">Total value</div>
-                <div className="val">{money(portfolio.totalValue)}</div>
+                <div className="val sensitive">{money(portfolio.totalValue)}</div>
               </div>
               <div className="insight-cell">
                 <div className="label">Unrealized</div>
                 <div
-                  className={`val ${
+                  className={`val sensitive ${
                     (portfolio.unrealized ?? 0) >= 0 ? "up" : "down"
                   }`}
                 >
@@ -122,9 +130,54 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
               </div>
             </div>
             <div className="insight-divider" />
-            {portfolio.positions.map((p) => (
-              <Position key={p.ticker} p={p} onToggleTax={toggleTax} />
-            ))}
+            {portfolio.count > 1 && (
+              <div className="holdings-filter">
+                <input
+                  className="holdings-search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Filter by ticker or name"
+                  spellCheck={false}
+                  autoComplete="off"
+                  aria-label="Filter holdings by ticker or name"
+                />
+                <div className="risk-seg" role="group" aria-label="Filter holdings">
+                  {(
+                    [
+                      ["all", "All"],
+                      ["gainers", "Gainers"],
+                      ["losers", "Losers"],
+                      ["taxloss", "Tax-loss"],
+                    ] as const
+                  ).map(([v, label]) => (
+                    <button
+                      key={v}
+                      className={filter === v ? "active" : ""}
+                      onClick={() => setFilter(v)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {(() => {
+              const q = query.trim().toLowerCase();
+              const filtered = portfolio.positions.filter((p) => {
+                if (q && !`${p.ticker} ${p.name ?? ""}`.toLowerCase().includes(q)) return false;
+                if (filter === "gainers") return (p.gainLoss ?? 0) > 0;
+                if (filter === "losers") return (p.gainLoss ?? 0) < 0;
+                if (filter === "taxloss") return p.notes.some((n) => n.kind === "tax");
+                return true;
+              });
+              return filtered.length ? (
+                filtered.map((p) => <Position key={p.ticker} p={p} onToggleTax={toggleTax} />)
+              ) : (
+                <div className="insight-foot" style={{ padding: "16px 18px", textAlign: "left" }}>
+                  No positions match this filter.
+                </div>
+              );
+            })()}
             <div className="insight-foot">
               {portfolio.count} tracked position{portfolio.count === 1 ? "" : "s"} · re-import
               anytime after a trade — this isn't meant to stay in sync automatically.
@@ -161,14 +214,14 @@ function Position({
             {p.ticker}
             {p.name && <span className="co">{p.name}</span>}
           </div>
-          <div className="src">
+          <div className="src sensitive">
             {p.shares} sh · {money(p.costBasis)} cost basis · {srcLabel}
             {p.taxAdvantaged ? " · tax-advantaged" : ""}
           </div>
         </div>
         <div className="h-vals">
-          <div className="px">{money(p.price)}</div>
-          <div className={`chg ${up ? "up" : "down"}`}>
+          <div className="px sensitive">{money(p.price)}</div>
+          <div className={`chg sensitive ${up ? "up" : "down"}`}>
             {signedMoney(p.gainLoss)}
             {p.gainLossPct != null ? ` · ${up ? "+" : "−"}${Math.abs(p.gainLossPct).toFixed(1)}%` : ""}
           </div>

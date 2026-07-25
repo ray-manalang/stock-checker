@@ -38,6 +38,7 @@ type View = "main" | "holdings" | "compare";
 export default function App() {
   const [view, setView] = useState<View>("main");
   const [risk, setRisk] = useState<RiskTolerance>("balanced");
+  const [blur, setBlur] = useState(() => localStorage.getItem("blurAmounts") === "1");
   const [ticker, setTicker] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +100,14 @@ export default function App() {
     }
   }
 
+  // Blur money figures — a fast "someone glanced at my screen" privacy toggle.
+  function toggleBlur() {
+    setBlur((b) => {
+      const next = !b;
+      localStorage.setItem("blurAmounts", next ? "1" : "0");
+      return next;
+    });
+  }
 
   const refreshUsage = () => getUsage().then(setUsage).catch(() => {});
   useEffect(() => {
@@ -166,7 +175,7 @@ export default function App() {
 
   return (
     <>
-    <div className="page">
+    <div className={`page${blur ? " blur-amounts" : ""}`}>
       <nav className="nav">
         <div className="brand">
           Market Specialist<span className="dot">.</span>
@@ -189,6 +198,13 @@ export default function App() {
             onClick={() => setView("compare")}
           >
             Compare
+          </button>
+          <button
+            className="nav-link"
+            onClick={toggleBlur}
+            title={blur ? "Show dollar amounts" : "Hide dollar amounts"}
+          >
+            {blur ? "Show $" : "Hide $"}
           </button>
         </div>
       </nav>
@@ -674,11 +690,11 @@ function HoldingsTeaser({ onOpen }: { onOpen: () => void }) {
         <div className="insight-cells" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
           <div className="insight-cell">
             <div className="label">Total value</div>
-            <div className="val">{money(portfolio!.totalValue)}</div>
+            <div className="val sensitive">{money(portfolio!.totalValue)}</div>
           </div>
           <div className="insight-cell">
             <div className="label">Unrealized</div>
-            <div className={`val ${(portfolio!.unrealized ?? 0) >= 0 ? "up" : "down"}`}>
+            <div className={`val sensitive ${(portfolio!.unrealized ?? 0) >= 0 ? "up" : "down"}`}>
               {portfolio!.unrealized == null
                 ? "—"
                 : `${portfolio!.unrealized >= 0 ? "+" : "−"}${money(Math.abs(portfolio!.unrealized))}`}

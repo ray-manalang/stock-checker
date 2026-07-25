@@ -471,11 +471,15 @@ app.post("/api/watchlist/signals/check", async (_req, res) => {
 });
 
 // ---------- holdings (Phase 3) ----------
-// Gather a price map (live + cached closes) for a set of tickers, reusing the
-// shared 1y cache and the 60s live-quote cache. closes feed the local verdict.
+// Gather a price map for a set of tickers from the shared daily-close cache.
+// Holdings is a periodic snapshot ("as of <date>"), so last-close prices are
+// the right granularity — and serving from cache keeps the page instant instead
+// of spawning the sidecar for live quotes on every load. Only genuinely
+// uncached tickers trigger a single batched fetch (then cached 24h). closes feed
+// the local verdict.
 async function holdingsPriceMap(tickers) {
   if (!tickers.length) return {};
-  const { fresh, stale } = freshSeriesMap(tickers, 6 * 60 * 60 * 1000);
+  const { fresh, stale } = freshSeriesMap(tickers, 24 * 60 * 60 * 1000);
   const seriesMap = { ...fresh };
   if (stale.length) {
     try {
@@ -485,23 +489,14 @@ async function holdingsPriceMap(tickers) {
         seriesMap[t] = series;
       }
     } catch {
-      /* best-effort */
+      /* best-effort — show whatever is cached */
     }
   }
-  const live = await liveQuotes(tickers).catch(() => ({}));
   const out = {};
   for (const t of tickers) {
     const s = seriesMap[t] ?? getCachedSeries(t);
-    const closes = s?.closes ?? null;
-    const { price: cachePrice, changePct: cacheChg } = priceChangeOf(
-      s?.closes ? { closes: s.closes } : {},
-    );
-    const l = live[t];
-    out[t] = {
-      price: l?.price ?? cachePrice ?? null,
-      changePct: l?.changePct ?? cacheChg ?? null,
-      closes,
-    };
+    const { price, changePct } = priceChangeOf(s?.closes ? { closes: s.closes } : {});
+    out[t] = { price: price ?? null, changePct: changePct ?? null, closes: s?.closes ?? null };
   }
   return out;
 }
