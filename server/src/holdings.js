@@ -22,6 +22,9 @@ import {
   setSetting,
 } from "./db.js";
 import { NAMES } from "./scanner/names.js";
+import { sectorOf } from "./scanner/sectors.js";
+
+const UNCLASSIFIED = "Unclassified";
 
 // ---------- CSV parsing ----------
 /** Parse CSV text into { headers, rows: object[] }. Handles quoted fields and
@@ -241,6 +244,7 @@ export function buildPortfolio(rawRows, flags, priceMap, { asOf } = {}) {
     return {
       ...p,
       name: NAMES[p.ticker] ?? null,
+      sector: sectorOf(p.ticker) ?? UNCLASSIFIED,
       price,
       changePct: pm.changePct ?? null,
       marketValue,
@@ -267,6 +271,7 @@ export function buildPortfolio(rawRows, flags, priceMap, { asOf } = {}) {
 
   return {
     positions,
+    bySector: sectorAllocation(positions, totalValue),
     totalValue: Number(totalValue.toFixed(2)),
     totalCost: Number(totalCost.toFixed(2)),
     unrealized: unrealized != null ? Number(unrealized.toFixed(2)) : null,
@@ -276,6 +281,27 @@ export function buildPortfolio(rawRows, flags, priceMap, { asOf } = {}) {
     sources: [...new Set(rawRows.map((r) => r.source).filter(Boolean))],
     asOf: asOf ?? null,
   };
+}
+
+/** Portfolio allocation grouped by GICS sector ("industry"): value, %, and
+ *  position count per sector, sorted by value descending. */
+export function sectorAllocation(positions, totalValue) {
+  const bySector = new Map();
+  for (const p of positions) {
+    const key = p.sector ?? UNCLASSIFIED;
+    const cur = bySector.get(key) ?? { sector: key, value: 0, count: 0 };
+    cur.value += p.marketValue ?? 0;
+    cur.count += 1;
+    bySector.set(key, cur);
+  }
+  return [...bySector.values()]
+    .map((s) => ({
+      sector: s.sector,
+      value: Number(s.value.toFixed(2)),
+      count: s.count,
+      pct: totalValue > 0 ? Number(((s.value / totalValue) * 100).toFixed(1)) : null,
+    }))
+    .sort((a, b) => b.value - a.value);
 }
 
 /** Per-position plain-English notes: tax-loss candidate (3.3), add-on-dip

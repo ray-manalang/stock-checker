@@ -178,9 +178,11 @@ export async function getWatchSignals(): Promise<WatchSignal[]> {
 // ---------- holdings ----------
 export type HoldingNote = { kind: string; title?: string; text: string };
 export type HoldingSource = { source: string; shares: number; costBasis: number | null };
+export type SectorAllocation = { sector: string; value: number; count: number; pct: number | null };
 export type Holding = {
   ticker: string;
   name: string | null;
+  sector: string;
   shares: number;
   costBasis: number | null;
   sources: HoldingSource[];
@@ -197,6 +199,7 @@ export type Holding = {
 };
 export type Portfolio = {
   positions: Holding[];
+  bySector: SectorAllocation[];
   totalValue: number;
   totalCost: number;
   unrealized: number | null;

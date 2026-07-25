@@ -6,6 +6,7 @@ import {
   setHoldingTax,
   type Portfolio,
   type Holding,
+  type SectorAllocation,
   type CsvMapping,
   type HoldingsPreview,
   type ImportSummary,
@@ -35,6 +36,7 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
   const [importing, setImporting] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<HoldingsFilter>("all");
+  const [sectorFilter, setSectorFilter] = useState<string>("");
 
   const load = () =>
     getHoldings()
@@ -130,6 +132,16 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
               </div>
             </div>
             <div className="insight-divider" />
+            {portfolio.count > 1 && portfolio.bySector.length > 1 && (
+              <>
+                <SectorBreakdown
+                  bySector={portfolio.bySector}
+                  active={sectorFilter}
+                  onSelect={(s) => setSectorFilter((cur) => (cur === s ? "" : s))}
+                />
+                <div className="insight-divider" />
+              </>
+            )}
             {portfolio.count > 1 && (
               <div className="holdings-filter">
                 <input
@@ -141,6 +153,19 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
                   autoComplete="off"
                   aria-label="Filter holdings by ticker or name"
                 />
+                <select
+                  className="holdings-sector"
+                  value={sectorFilter}
+                  onChange={(e) => setSectorFilter(e.target.value)}
+                  aria-label="Filter holdings by industry"
+                >
+                  <option value="">All industries</option>
+                  {portfolio.bySector.map((s) => (
+                    <option key={s.sector} value={s.sector}>
+                      {s.sector} ({s.count})
+                    </option>
+                  ))}
+                </select>
                 <div className="risk-seg" role="group" aria-label="Filter holdings">
                   {(
                     [
@@ -165,6 +190,7 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
               const q = query.trim().toLowerCase();
               const filtered = portfolio.positions.filter((p) => {
                 if (q && !`${p.ticker} ${p.name ?? ""}`.toLowerCase().includes(q)) return false;
+                if (sectorFilter && p.sector !== sectorFilter) return false;
                 if (filter === "gainers") return (p.gainLoss ?? 0) > 0;
                 if (filter === "losers") return (p.gainLoss ?? 0) < 0;
                 if (filter === "taxloss") return p.notes.some((n) => n.kind === "tax");
@@ -192,6 +218,45 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
         )}
       </div>
     </>
+  );
+}
+
+// Allocation by GICS sector ("industry"): a ranked set of meter rows. Clicking a
+// row filters the positions below to that industry (click again to clear).
+function SectorBreakdown({
+  bySector,
+  active,
+  onSelect,
+}: {
+  bySector: SectorAllocation[];
+  active: string;
+  onSelect: (sector: string) => void;
+}) {
+  return (
+    <div className="sector-alloc">
+      <div className="sector-alloc-head">Allocation by industry</div>
+      {bySector.map((s) => (
+        <button
+          key={s.sector}
+          className={`sector-row${active === s.sector ? " active" : ""}`}
+          onClick={() => onSelect(s.sector)}
+          title={active === s.sector ? "Clear industry filter" : `Show only ${s.sector}`}
+        >
+          <div className="sector-row-top">
+            <span className="sector-name">
+              {s.sector}
+              <span className="sector-count"> · {s.count}</span>
+            </span>
+            <span className="sector-val">
+              <span className="sensitive">{money(s.value)}</span> · {s.pct}%
+            </span>
+          </div>
+          <div className="meter-track">
+            <div className="meter-fill" style={{ width: `${Math.min(100, s.pct ?? 0)}%` }} />
+          </div>
+        </button>
+      ))}
+    </div>
   );
 }
 

@@ -7,6 +7,7 @@ import {
   blendPositions,
   buildPortfolio,
   positionNotes,
+  sectorAllocation,
 } from "./holdings.js";
 
 test("parseCsv: handles quoted fields with commas and embedded quotes", () => {
@@ -85,4 +86,36 @@ test("positionNotes: tax-loss note only for taxable losers; muted for tax-advant
 test("positionNotes: BUY signal on a held name yields an add-on-dip note", () => {
   const notes = positionNotes({ gainLoss: 500, taxAdvantaged: false, signal: "BUY" });
   assert.ok(notes.some((n) => n.kind === "addon"));
+});
+
+test("buildPortfolio: tags positions with a GICS sector and groups bySector", () => {
+  const raw = [
+    { ticker: "AAPL", shares: 10, costBasis: 100, source: "Fidelity" }, // Info Tech
+    { ticker: "MSFT", shares: 10, costBasis: 100, source: "Fidelity" }, // Info Tech
+    { ticker: "JPM", shares: 10, costBasis: 100, source: "Fidelity" }, // Financials
+  ];
+  const priceMap = {
+    AAPL: { price: 100 },
+    MSFT: { price: 100 },
+    JPM: { price: 200 },
+  };
+  const p = buildPortfolio(raw, {}, priceMap, {});
+  assert.equal(p.positions.find((x) => x.ticker === "AAPL").sector, "Information Technology");
+  // IT = 2000 (AAPL 1000 + MSFT 1000), Financials = 2000 (JPM) → both 50%.
+  const it = p.bySector.find((s) => s.sector === "Information Technology");
+  assert.equal(it.count, 2);
+  assert.equal(it.value, 2000);
+  assert.equal(it.pct, 50);
+  // Sorted by value descending, and pct sums to ~100.
+  const totalPct = p.bySector.reduce((s, x) => s + (x.pct ?? 0), 0);
+  assert.ok(Math.abs(totalPct - 100) < 0.5);
+});
+
+test("sectorAllocation: unmapped tickers fall into Unclassified", () => {
+  const positions = [
+    { ticker: "ZZZZ", sector: "Unclassified", marketValue: 500 },
+    { ticker: "AAPL", sector: "Information Technology", marketValue: 500 },
+  ];
+  const alloc = sectorAllocation(positions, 1000);
+  assert.ok(alloc.some((s) => s.sector === "Unclassified" && s.pct === 50));
 });

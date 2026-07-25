@@ -110,7 +110,7 @@ good snapshot in place and the UI labels it stale.
 | PUT | `/api/settings` | body `{ riskTolerance? }` | `{ ok, riskTolerance }` |
 | GET | `/api/watchlist/signals` | — | `{ data: WatchSignal[] }` — per-ticker last verdict + notify state |
 | POST | `/api/watchlist/signals/check` | — | `{ ok, checked, notified }` — runs the daily scan now |
-| GET | `/api/holdings` | — | `{ data: Portfolio, macro }` — rolled-up positions with gain/loss, concentration %, notes |
+| GET | `/api/holdings` | — | `{ data: Portfolio, macro }` — rolled-up positions (gain/loss, concentration %, GICS sector, notes) + `bySector` allocation |
 | POST | `/api/holdings/preview` | body `{ csv }` | `{ data: { headers, sample, rowCount, suggestedMapping } }` |
 | POST | `/api/holdings/import` | body `{ csv, mapping, asOf? }` | `{ ok, imported, positions, skipped, skippedSymbols, asOf }` |
 | POST | `/api/holdings/:ticker/tax` | body `{ taxAdvantaged }` | `{ ok }` — per-position flag (survives re-import) |

@@ -65,8 +65,9 @@ proactive notifications, trust (backtesting), and deeper analysis.
   alerts, track-record teasers + macro/scanner/CNBC); the ticker check tool moved to its own
   **Research** page. Personal cards lead the dashboard instead of sitting below the market
   cards. Restored a text-only **Hide $** privacy toggle. Removed the Compare view.
-- **Holdings:** added filtering (search + All/Gainers/Losers/Tax-loss); serve last-close
-  prices from the shared cache instead of spawning the live-quote sidecar per load (was slow).
+- **Holdings:** added filtering (search + All/Gainers/Losers/Tax-loss + an industry/GICS-
+  sector dropdown), plus an "Allocation by industry" breakdown (clickable to filter); serve
+  last-close prices from the shared cache instead of spawning the live-quote sidecar per load.
 - **Fixed a sidecar bug that surfaced as "Market data unavailable (429)".** `yf_fetch.py`
   emitted `NaN` for tickers whose latest bar was a partial/NaN close (e.g. WDAY, SPCX); `NaN`
   is invalid JSON, so Node's parse threw and the check fell through to the plain-Node Yahoo
