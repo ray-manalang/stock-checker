@@ -1131,12 +1131,6 @@ body:has(.tape) .page {
 }
 .blur-amounts .sensitive:hover { filter: blur(0); }
 
-/* "NEW" badge for roadmap features. */
-.new-badge {
-  font-size: 10px; font-weight: 700; letter-spacing: 0.03em; color: var(--accent);
-  background: var(--accent-bg); border-radius: 999px; padding: 3px 8px; white-space: nowrap;
-}
-
 /* Risk-tolerance segmented control (compact). */
 .risk-seg { display: inline-flex; background: var(--surface-2); border-radius: 999px; padding: 3px; gap: 2px; }
 .risk-seg button {

@@ -34,10 +34,7 @@ export function WatchingToBuy({ onOpen }: { onOpen: (ticker: string) => void }) 
   return (
     <div className="insight-card">
       <div className="insight-head">
-        <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
-          <h3>Watching to buy</h3>
-          <span className="new-badge">NEW</span>
-        </div>
+        <h3>Watching to buy</h3>
       </div>
       <div className="caption">
         Notifies only the day a verdict first turns into "Good time to buy" — not every day it

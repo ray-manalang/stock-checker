@@ -58,10 +58,7 @@ export function AlertsPanel() {
     return (
       <div className="insight-card">
         <div className="insight-head">
-          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <h3>Your alerts</h3>
-            <span className="new-badge">NEW</span>
-          </div>
+          <h3>Your alerts</h3>
         </div>
         <div className="insight-foot" style={{ paddingTop: 6 }}>
           No price alerts yet. Set one from any stock's answer card, or{" "}
@@ -77,10 +74,7 @@ export function AlertsPanel() {
   return (
     <div className="insight-card">
       <div className="insight-head">
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <h3>Your alerts</h3>
-          <span className="new-badge">NEW</span>
-        </div>
+        <h3>Your alerts</h3>
       </div>
       <div className="insight-foot" style={{ marginTop: 4, marginBottom: 6 }}>
         Price-threshold alerts — deprioritized in favor of Watching to buy, but still here.

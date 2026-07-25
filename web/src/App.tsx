@@ -684,10 +684,7 @@ function HoldingsTeaser({ onOpen }: { onOpen: () => void }) {
   return (
     <div className="insight-card">
       <div className="insight-head">
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <h3>Your holdings</h3>
-          <span className="new-badge">NEW</span>
-        </div>
+        <h3>Your holdings</h3>
         <button className="btn-ghost btn-sm" onClick={onOpen}>
           {has ? "View holdings →" : "Import →"}
         </button>

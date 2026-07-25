@@ -30,10 +30,7 @@ export function BacktestCard() {
   return (
     <div className="insight-card">
       <div className="insight-head">
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <h3>Track record</h3>
-          <span className="new-badge">NEW</span>
-        </div>
+        <h3>Track record</h3>
         {!opened && (
           <button className="btn-ghost btn-sm" onClick={load}>
             Show hit rate
