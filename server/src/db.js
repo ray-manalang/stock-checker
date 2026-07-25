@@ -130,6 +130,14 @@ export function db() {
       value TEXT,
       updated_at TEXT
     );
+    -- Company-name cache. The static NAMES map only covers the scanner universe
+    -- (S&P 500); this fills in names for anything else held (ETFs, funds, dual-
+    -- class shares) once resolved via the sidecar. Names are effectively static.
+    CREATE TABLE IF NOT EXISTS company_names (
+      ticker TEXT PRIMARY KEY,
+      name TEXT,
+      updated_at TEXT
+    );
   `);
   // Additive column migrations (safe on existing DBs — ignore "duplicate column").
   for (const ddl of [
@@ -307,6 +315,34 @@ export function setHoldingFlag(ticker, taxAdvantaged) {
        VALUES (?, ?, ?)`,
     )
     .run(ticker, taxAdvantaged ? 1 : 0, new Date().toISOString());
+}
+
+// ---------- company names cache ----------
+/** Cached company names for the given tickers → { ticker: name }. */
+export function getCompanyNames(tickers) {
+  if (!tickers?.length) return {};
+  const placeholders = tickers.map(() => "?").join(",");
+  const out = {};
+  for (const r of db()
+    .prepare(`SELECT ticker, name FROM company_names WHERE ticker IN (${placeholders})`)
+    .all(...tickers)) {
+    if (r.name) out[r.ticker] = r.name;
+  }
+  return out;
+}
+
+/** Upsert a { ticker: name } map (skips null/empty names). */
+export function upsertCompanyNames(map) {
+  const at = new Date().toISOString();
+  const stmt = db().prepare(
+    `INSERT OR REPLACE INTO company_names (ticker, name, updated_at) VALUES (?, ?, ?)`,
+  );
+  const tx = db().transaction((entries) => {
+    for (const [ticker, name] of entries) {
+      if (name) stmt.run(ticker, name, at);
+    }
+  });
+  tx(Object.entries(map ?? {}));
 }
 
 // ---------- macro ----------

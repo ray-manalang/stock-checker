@@ -230,7 +230,7 @@ function localSignal(closes, price) {
  * Returns positions (with gain/loss, concentration %, notes), totals, and the
  * "as of" date. Pure aside from reading demo state via the caller.
  */
-export function buildPortfolio(rawRows, flags, priceMap, { asOf } = {}) {
+export function buildPortfolio(rawRows, flags, priceMap, { asOf, names = {} } = {}) {
   const positions = blendPositions(rawRows).map((p) => {
     const pm = priceMap[p.ticker] ?? {};
     const price = pm.price ?? null;
@@ -243,7 +243,7 @@ export function buildPortfolio(rawRows, flags, priceMap, { asOf } = {}) {
     const signal = localSignal(pm.closes, price);
     return {
       ...p,
-      name: NAMES[p.ticker] ?? null,
+      name: names[p.ticker] ?? NAMES[p.ticker] ?? null,
       sector: sectorOf(p.ticker) ?? UNCLASSIFIED,
       price,
       changePct: pm.changePct ?? null,
@@ -336,11 +336,12 @@ function fmtLoss(gainLoss) {
 }
 
 // ---------- entry point used by the route ----------
-/** Read holdings and return the built portfolio. `priceMap` is supplied by the
- *  caller (index.js gathers prices via the shared cache). */
-export function rollupHoldings(priceMap) {
+/** Read holdings and return the built portfolio. `priceMap` and `names` are
+ *  supplied by the caller (index.js gathers prices + names via the shared cache). */
+export function rollupHoldings(priceMap, names = {}) {
   return buildPortfolio(listHoldingsRaw(), holdingsFlags(), priceMap, {
     asOf: getSetting("holdingsAsOf", null),
+    names,
   });
 }
 

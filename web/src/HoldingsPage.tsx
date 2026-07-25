@@ -83,8 +83,10 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
           </button>
           <h2 style={{ margin: 0, fontSize: 24 }}>Holdings</h2>
           <div className="insight-foot" style={{ marginTop: 4, padding: 0, textAlign: "left" }}>
-            {portfolio?.sources?.length
-              ? `Rolled up across ${portfolio.sources.join(" + ")} · as of ${asOfLabel(portfolio.asOf)}`
+            {portfolio && portfolio.count > 0
+              ? `${portfolio.count} holding${portfolio.count === 1 ? "" : "s"}${
+                  portfolio.sources?.length ? ` · rolled up across ${portfolio.sources.join(" + ")}` : ""
+                } · as of ${asOfLabel(portfolio.asOf)}`
               : "Import a positions CSV to get started."}
           </div>
         </div>

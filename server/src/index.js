@@ -29,8 +29,10 @@ import {
   listHoldingsRaw,
   setHoldingFlag,
   verdictLogStats,
+  getCompanyNames,
+  upsertCompanyNames,
 } from "./db.js";
-import { fetchSeriesMulti, liveQuotes } from "./stocks.js";
+import { fetchSeriesMulti, liveQuotes, fetchCompanyNames } from "./stocks.js";
 import {
   startScheduler,
   runMacro,
@@ -505,7 +507,20 @@ app.get("/api/holdings", async (_req, res) => {
   try {
     const tickers = heldTickers();
     const priceMap = await holdingsPriceMap(tickers);
-    const portfolio = rollupHoldings(priceMap);
+    // Resolve company names: the static NAMES map covers the S&P 500; fill the
+    // rest (ETFs, funds, dual-class shares) from the cache, and fetch any still-
+    // unknown names once via the sidecar (then cached — this only runs the first
+    // time a new ticker is held).
+    const names = getCompanyNames(tickers);
+    const unknown = tickers.filter((t) => !names[t] && !NAMES[t]);
+    if (unknown.length) {
+      const fetched = await fetchCompanyNames(unknown);
+      if (Object.keys(fetched).length) {
+        upsertCompanyNames(fetched);
+        Object.assign(names, fetched);
+      }
+    }
+    const portfolio = rollupHoldings(priceMap, names);
     const macro = latestMacro();
     res.json({
       data: portfolio,

@@ -166,6 +166,23 @@ def cmd_quote(symbols):
     return out
 
 
+def cmd_names(symbols):
+    """Best-effort company name per symbol (for the holdings name cache). Uses
+    get_info; fails soft to null per ticker."""
+    import yfinance as yf
+
+    out = {}
+    for sym in symbols:
+        name = None
+        try:
+            info = yf.Ticker(sym).get_info()
+            name = info.get("longName") or info.get("shortName") or None
+        except Exception:
+            name = None
+        out[sym] = name
+    return out
+
+
 def cmd_fundamentals(symbol):
     """4 quarters of financials + derived ratios (ported from the old analyzer)."""
     import yfinance as yf
@@ -294,6 +311,11 @@ def main():
         if not symbols:
             raise SystemExit("quote: no symbols")
         result = cmd_quote(symbols)
+    elif mode == "names":
+        symbols = sys.argv[2:]
+        if not symbols:
+            raise SystemExit("names: no symbols")
+        result = cmd_names(symbols)
     elif mode == "fundamentals":
         result = cmd_fundamentals(sys.argv[2])
     else:

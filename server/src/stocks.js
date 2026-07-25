@@ -544,6 +544,28 @@ export async function liveQuotes(symbols) {
   return out;
 }
 
+/**
+ * Best-effort company names for a set of symbols via the sidecar → { SYM: name }.
+ * Used to fill the holdings name cache for tickers outside the static NAMES map
+ * (ETFs, funds, dual-class shares). Returns {} if the sidecar is unavailable.
+ */
+export async function fetchCompanyNames(symbols) {
+  if (!symbols?.length || !yfEnabled()) return {};
+  try {
+    const r = await runYf(["names", ...symbols]);
+    const out = {};
+    if (r) {
+      for (const [sym, name] of Object.entries(r)) {
+        if (typeof name === "string" && name.trim()) out[sym] = name.trim();
+      }
+    }
+    return out;
+  } catch (err) {
+    markYfError(err);
+    return {};
+  }
+}
+
 // Fundamentals mean spawning a Python subprocess, and /api/check calls this on
 // every request — including ones a cached deep-dive will answer. Quarterly
 // filings don't move within a day, so memoize per symbol. Failures are cached

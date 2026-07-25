@@ -191,6 +191,7 @@ on the `stock-checker-data` named volume.
 | `holdings` | `id`, `ticker`, `shares`, `cost_basis`, `source`, `imported_at` | CSV import (replace-all) | `/api/holdings` |
 | `holdings_flags` | PK `ticker`, `tax_advantaged` | tax toggle (survives re-import) | `/api/holdings` |
 | `settings` | PK `key`, `value` (JSON) | `/api/settings`, holdings import | risk tolerance, CSV mapping, holdings as-of |
+| `company_names` | PK `ticker`, `name` | `/api/holdings` (fills unknown names once via the sidecar `names` cmd) | holdings display |
 
 Two additive column migrations (`scanner_results.sector`, `.sector_rank`) run as guarded
 `ALTER TABLE` statements on boot, so existing DBs pick them up without a migration system.
