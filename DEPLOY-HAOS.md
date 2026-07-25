@@ -21,8 +21,18 @@ One container serves the React UI and Express API on port **3001** inside the co
 
    | Name | Value |
    |------|--------|
-   | `ANTHROPIC_API_KEY` | your Claude key (keep secret) — enables the LLM layer |
+   | `ANTHROPIC_API_KEY` | your Claude key (keep secret) — enables the deep-dive + analyst layer |
    | `TWELVE_DATA_API_KEY` | optional fallback data source (Yahoo sidecar is primary) |
+   | `RESEND_API_KEY` | [Resend](https://resend.com) key — required to *email* buy-zone alerts |
+   | `ALERT_EMAIL` | where alert emails go, e.g. `you@example.com` |
+   | `ALERT_FROM` | sender header — defaults to `Market Specialist <onboarding@resend.dev>` |
+   | `MARKET_TZ` | market clock for the nightly jobs — defaults to `America/New_York` |
+   | `SCANNER_UNIVERSE_SIZE` | how many names the scanner ranks (default `50`) |
+
+   > **Alert email:** without `RESEND_API_KEY` **and** `ALERT_EMAIL` the alerts still
+   > fire and flip to *triggered* in the UI — they just don't send mail. With Resend's
+   > shared `onboarding@resend.dev` sender, delivery only works to your own Resend
+   > account address; verify a domain and change `ALERT_FROM` to send anywhere else.
 
 9. Deploy the stack. **The first build takes several minutes** — the image installs Python + pandas/numpy/yfinance in addition to Node (see notes below).
 10. Open the app: `http://<ha-ip>:8088` (e.g. `http://192.168.1.50:8088`).
@@ -66,6 +76,21 @@ Expected: `{"ok":true,"llm":true}` when `ANTHROPIC_API_KEY` is set (`llm:false` 
 ## Logs
 
 Portainer → **Containers** → `stock-checker` → **Logs**. On boot you'll see `[job] computeMacro ok` and `[job] runScanner ok` as the Pro-layer snapshots build.
+
+## Schedules
+
+The container clock is UTC, but the market-clock jobs are pinned to `MARKET_TZ`
+(default `America/New_York`), so they don't drift with daylight saving:
+
+| Job | When | What it refreshes |
+|---|---|---|
+| Macro gate | every 20 min | Market conditions card |
+| Scanner | 21:15 ET nightly | Top-ranked stocks |
+| Analyst | 03:00 ET Sundays | Claude fundamental scores (needs `ANTHROPIC_API_KEY`) |
+| Alerts | every 10 min | Buy-zone alert checks |
+
+Macro and scanner also run once at boot when their tables are empty. Any layer can be
+recomputed on demand from the Pro tab's Refresh buttons.
 
 ## Updates
 

@@ -524,12 +524,38 @@ export async function liveQuotes(symbols) {
   return out;
 }
 
+// Fundamentals mean spawning a Python subprocess, and /api/check calls this on
+// every request — including ones a cached deep-dive will answer. Quarterly
+// filings don't move within a day, so memoize per symbol. Failures are cached
+// too (briefly) so a broken ticker doesn't spawn a process per page view.
+const FUNDAMENTALS_TTL_MS = 6 * 60 * 60 * 1000;
+const FUNDAMENTALS_MISS_TTL_MS = 30 * 60 * 1000;
+const _fundamentalsCache = new Map();
+
 export async function fetchFundamentals(ticker) {
   const symbol = normalizeSymbol(ticker);
+  const hit = _fundamentalsCache.get(symbol);
+  if (hit) {
+    const ttl = hit.value ? FUNDAMENTALS_TTL_MS : FUNDAMENTALS_MISS_TTL_MS;
+    if (Date.now() - hit.at < ttl) return hit.value;
+  }
+  const value = await fetchFundamentalsUncached(symbol);
+  _fundamentalsCache.set(symbol, { at: Date.now(), value });
+  return value;
+}
+
+async function fetchFundamentalsUncached(symbol) {
   if (yfEnabled()) {
     try {
       const r = await runYf(["fundamentals", symbol]);
-      if (r?.financials) return { quarterEnd: r.quarterEnd ?? null, financials: r.financials };
+      if (r?.financials) {
+        return {
+          quarterEnd: r.quarterEnd ?? null,
+          // Feeds the opt-in scanner short-interest factor; often null.
+          shortRatio: r.shortRatio ?? null,
+          financials: r.financials,
+        };
+      }
     } catch (err) {
       markYfError(err);
     }

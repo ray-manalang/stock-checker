@@ -8,6 +8,8 @@ shells out to this script for real Yahoo data.
 Usage:
     yf_fetch.py chart <SYMBOL> <range>          -> {"quote": {...}, "series": {...}}
     yf_fetch.py multi <range> <SYM1> <SYM2> ...  -> {"<SYM>": {closes, volumes, timestamp}, ...}
+    yf_fetch.py quote <SYM1> <SYM2> ...          -> {"<SYM>": {price, prevClose} | null, ...}
+    yf_fetch.py fundamentals <SYMBOL>            -> {"quarterEnd", "shortRatio", "financials"}
 
 Ranges: 1y | 5y | 5d (mapped to yfinance periods). All output is JSON on stdout;
 errors go to stderr with a non-zero exit.
@@ -205,6 +207,17 @@ def cmd_fundamentals(symbol):
     except Exception:
         quarter_end = None
 
+    # Short interest, for the opt-in scanner factor. Lives on .info (not
+    # fast_info) and is missing for plenty of names — fail soft to None.
+    short_ratio = None
+    try:
+        info = tk.get_info()
+        raw = info.get("shortRatio")
+        if raw is not None:
+            short_ratio = round(float(raw), 4)
+    except Exception:
+        short_ratio = None
+
     financials = {
         "ticker": symbol,
         "quarters": [str(c.date()) if hasattr(c, "date") else str(c) for c in (income_q.columns[:4].tolist() if income_q is not None else [])],
@@ -223,7 +236,11 @@ def cmd_fundamentals(symbol):
             "spread": round(ar_growth - rev_growth, 4) if ar_growth is not None and rev_growth is not None else None,
         },
     }
-    return {"quarterEnd": quarter_end, "financials": financials}
+    return {
+        "quarterEnd": quarter_end,
+        "shortRatio": short_ratio,
+        "financials": financials,
+    }
 
 
 def main():

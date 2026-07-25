@@ -55,13 +55,18 @@ export function runAlertsJob() {
   return guard("checkAlerts", () => checkAlerts());
 }
 
+// Market-clock jobs are pinned to US market time so they don't drift with DST
+// (and don't silently run mid-afternoon ET when the container's clock is UTC).
+const MARKET_TZ = process.env.MARKET_TZ || "America/New_York";
+const inMarketTz = { timezone: MARKET_TZ };
+
 export function startScheduler() {
-  // Macro gate ~ every 20 minutes.
+  // Macro gate ~ every 20 minutes (interval-based — timezone is irrelevant).
   cron.schedule("*/20 * * * *", () => runMacro());
-  // Scanner nightly at 22:15 (after the close).
-  cron.schedule("15 22 * * *", () => runScannerJob());
-  // Analyst weekly (Sunday 03:00) — the quarter cache bounds the real cost.
-  cron.schedule("0 3 * * 0", () => runAnalystJob());
+  // Scanner nightly at 21:15 ET — well after the close and any late revisions.
+  cron.schedule("15 21 * * *", () => runScannerJob(), inMarketTz);
+  // Analyst weekly (Sunday 03:00 ET) — the quarter cache bounds the real cost.
+  cron.schedule("0 3 * * 0", () => runAnalystJob(), inMarketTz);
   // Buy-zone alerts ~ every 10 minutes during the day.
   cron.schedule("*/10 * * * *", () => runAlertsJob());
 

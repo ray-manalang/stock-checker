@@ -125,8 +125,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Run the L2 scanner. Respects the macro gate: DEFENSIVE returns empty (scanner
- * off), REDUCED filters to composite >= 75, OFFENSIVE returns the full ranking.
- * Uses batched spark closes + 24h cache. Returns { rows, macroMode, breadth }.
+ * off), REDUCED slices to the top REDUCED_TOP names, OFFENSIVE returns the full
+ * ranking. Uses batched closes + the 24h price cache.
+ * Returns { rows, macroMode, breadth }.
  */
 export async function runScanner({ macroMode = "OFFENSIVE", top = 100 } = {}) {
   if (macroMode === "DEFENSIVE") {
@@ -154,8 +155,10 @@ export async function runScanner({ macroMode = "OFFENSIVE", top = 100 } = {}) {
     return { rows: [], macroMode, breadth: null };
   }
 
-  // Short interest is fragile and expensive across the universe — opt-in only.
-  let shortRatioMap = {};
+  // Short interest is fragile and expensive across the universe (one Python
+  // subprocess per ticker) — opt-in only. The sidecar surfaces shortRatio on the
+  // fundamentals payload; names without it simply drop out of the factor.
+  const shortRatioMap = {};
   if (process.env.SCANNER_SHORT_INTEREST === "1") {
     for (const t of tickers) {
       const f = await fetchFundamentals(t);
