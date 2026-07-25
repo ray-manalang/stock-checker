@@ -1288,3 +1288,17 @@ body:has(.tape) .page {
   color: var(--accent); font: inherit; font-size: inherit;
 }
 .linklike:hover { text-decoration: underline; }
+
+/* Clearable text inputs — an × that clears the field when it has content. */
+.clearable { position: relative; display: inline-flex; align-items: stretch; }
+.clear-x {
+  position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; padding: 0; margin: 0;
+  background: none; border: none; color: var(--text-3);
+  font-size: 16px; line-height: 1; cursor: pointer; border-radius: 50%;
+}
+.clear-x:hover { color: var(--text); background: var(--hairline-soft); }
+/* Textarea variant: pin the × to the top-right corner. */
+.clearable-ta { position: relative; display: block; }
+.clearable-ta .clear-x { top: 10px; transform: none; }

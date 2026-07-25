@@ -19,6 +19,7 @@ import { useLivePrices } from "./livePrices";
 import type { CheckResponse, Tone, Word } from "./types";
 import { InfoTip } from "./components/InfoTip";
 import { PriceChart } from "./components/PriceChart";
+import { ClearableInput } from "./components/ClearableInput";
 import { ProView } from "./ProView";
 import { TickerTape } from "./TickerTape";
 import { WatchingToBuy } from "./WatchingToBuy";
@@ -218,14 +219,16 @@ export default function App() {
         <label htmlFor="ticker" className="sr-only">
           Ticker symbol
         </label>
-        <input
+        <ClearableInput
           id="ticker"
           value={ticker}
           onChange={(e) => setTicker(e.target.value.toUpperCase())}
+          onClear={() => setTicker("")}
           placeholder="Type a ticker — AAPL"
           autoComplete="off"
           spellCheck={false}
           disabled={loading}
+          wrapperStyle={{ flex: 1 }}
         />
         <button className="btn-primary" disabled={loading || !ticker.trim()}>
           {loading ? (
@@ -303,9 +306,10 @@ export default function App() {
           }}
           style={{ display: "inline-flex", gap: 6 }}
         >
-          <input
+          <ClearableInput
             value={watchInput}
             onChange={(e) => setWatchInput(e.target.value.toUpperCase())}
+            onClear={() => setWatchInput("")}
             placeholder="+ Add ticker"
             aria-label="Add a ticker to your watchlist"
             spellCheck={false}
@@ -526,9 +530,10 @@ function AnswerCard({
             <span className="muted" style={{ fontSize: 14 }}>
               Alert me when {quote.ticker} drops to
             </span>
-            <input
+            <ClearableInput
               value={alertPrice}
               onChange={(e) => setAlertPrice(e.target.value)}
+              onClear={() => setAlertPrice("")}
               inputMode="decimal"
               style={{
                 width: 110,

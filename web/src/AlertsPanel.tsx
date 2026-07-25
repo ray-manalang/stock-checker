@@ -6,6 +6,7 @@ import {
   deleteAlert,
   type Alert,
 } from "./api";
+import { ClearableInput } from "./components/ClearableInput";
 
 function describe(a: Alert): string {
   if (a.status === "triggered") {
@@ -89,9 +90,10 @@ export function AlertsPanel() {
                 {a.ticker}
               </div>
               {editing === a.id ? (
-                <input
+                <ClearableInput
                   value={editVal}
                   onChange={(e) => setEditVal(e.target.value)}
+                  onClear={() => setEditVal("")}
                   inputMode="decimal"
                   autoFocus
                   style={{
@@ -138,9 +140,10 @@ export function AlertsPanel() {
 
       {adding ? (
         <div className="alert-row" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
+            <ClearableInput
               value={newTicker}
               onChange={(e) => setNewTicker(e.target.value.toUpperCase())}
+              onClear={() => setNewTicker("")}
               placeholder="Ticker"
               spellCheck={false}
               style={{
@@ -152,9 +155,10 @@ export function AlertsPanel() {
                 padding: "7px 10px",
               }}
             />
-            <input
+            <ClearableInput
               value={newPrice}
               onChange={(e) => setNewPrice(e.target.value)}
+              onClear={() => setNewPrice("")}
               placeholder="≤ price"
               inputMode="decimal"
               style={{

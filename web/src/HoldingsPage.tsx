@@ -12,6 +12,7 @@ import {
   type ImportSummary,
 } from "./api";
 import { money } from "./lib/format";
+import { ClearableInput } from "./components/ClearableInput";
 
 function signedMoney(v: number | null): string {
   if (v == null) return "—";
@@ -144,14 +145,16 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
             )}
             {portfolio.count > 1 && (
               <div className="holdings-filter">
-                <input
+                <ClearableInput
                   className="holdings-search"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
+                  onClear={() => setQuery("")}
                   placeholder="Filter by ticker or name"
                   spellCheck={false}
                   autoComplete="off"
                   aria-label="Filter holdings by ticker or name"
+                  wrapperStyle={{ flex: 1, minWidth: 160 }}
                 />
                 <select
                   className="holdings-sector"
@@ -452,12 +455,26 @@ function ImportPanel({
       ) : (
         <>
           <input type="file" accept=".csv,text/csv" onChange={onFile} />
-          <textarea
-            placeholder="…or paste CSV contents here"
-            value={csv}
-            onChange={(e) => setCsv(e.target.value)}
-            onBlur={() => csv.trim() && !preview && doPreview(csv)}
-          />
+          <span className="clearable-ta">
+            <textarea
+              placeholder="…or paste CSV contents here"
+              value={csv}
+              onChange={(e) => setCsv(e.target.value)}
+              onBlur={() => csv.trim() && !preview && doPreview(csv)}
+            />
+            {csv.length > 0 && (
+              <button
+                type="button"
+                className="clear-x"
+                aria-label="Clear"
+                tabIndex={-1}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setCsv("")}
+              >
+                ×
+              </button>
+            )}
+          </span>
           {!preview && (
             <button
               className="btn-ghost btn-sm"
