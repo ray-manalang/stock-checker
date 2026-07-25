@@ -483,9 +483,11 @@ tool, which stays mounted and usable.
 alphabetical, duplicated track for a seamless marquee, `%`/`$` toggle, reloads every 60 s.
 
 **Shared live prices** (`livePrices.ts`) — one module-level refcounted registry and a single
-60 s poller feeding `GET /api/quotes`. The answer card, the scanner rows, and the tape all
-subscribe, so the same symbol shows the same price everywhere. On error it keeps the last
-known price.
+60 s poller feeding `GET /api/quotes`. The answer card, the scanner rows, the tape, and the
+Holdings page all subscribe, so the same symbol shows the same price everywhere. On error it
+keeps the last known price. `/api/holdings` still serves cached last-close prices for an
+instant load; the Holdings page then overlays the live poller on the client (`liveAdjust`),
+recomputing market value, gain/loss, totals, concentration, and the sector allocation.
 
 **Timers running concurrently**: live prices 60 s · tape reload 60 s · macro+scanner poll
 30 s · CNBC 5 min.

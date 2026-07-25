@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   getHoldings,
   previewHoldings,
@@ -6,6 +6,7 @@ import {
   setHoldingTax,
   type Portfolio,
   type Holding,
+  type HoldingNote,
   type SectorAllocation,
   type CsvMapping,
   type HoldingsPreview,
@@ -13,6 +14,7 @@ import {
 } from "./api";
 import { money } from "./lib/format";
 import { ClearableInput } from "./components/ClearableInput";
+import { useLivePrices } from "./livePrices";
 
 // Same zone → pill-tone mapping the Market conditions card uses (ProView).
 const ZONE_TONE: Record<string, string> = {
@@ -31,6 +33,105 @@ function asOfLabel(iso: string | null): string {
   return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 }
 
+const round1 = (n: number) => Number(n.toFixed(1));
+const round2 = (n: number) => Number(n.toFixed(2));
+const fmtAbs = (v: number) => `$${Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+
+// Recompute a position's tax-loss / add-on notes from a (live) gain/loss. Mirrors
+// the server's positionNotes so the notes stay consistent with the live figures;
+// the add-on note is price-independent (verdict-based), so it's carried through.
+function liveNotes(p: {
+  gainLoss: number | null;
+  taxAdvantaged: boolean;
+  serverNotes: HoldingNote[];
+}): HoldingNote[] {
+  const notes: HoldingNote[] = [];
+  const loss = p.gainLoss != null && p.gainLoss < -1;
+  if (loss && p.taxAdvantaged) {
+    notes.push({
+      kind: "muted",
+      text: `Down ${fmtAbs(p.gainLoss!)}, but held in a tax-advantaged account — those aren't harvest-eligible, so no tax-loss note here.`,
+    });
+  } else if (loss) {
+    notes.push({
+      kind: "tax",
+      title: "Tax-loss candidate",
+      text: `Down ${fmtAbs(p.gainLoss!)} from cost basis. Some investors sell losers like this to offset gains elsewhere, then wait 30+ days before rebuying to avoid the wash-sale rule. This isn't tax advice.`,
+    });
+  }
+  const addon = p.serverNotes.find((n) => n.kind === "addon");
+  if (addon) notes.push(addon);
+  return notes;
+}
+
+/**
+ * Overlay live prices (from the shared 60s poller) onto the server's portfolio,
+ * recomputing market value, gain/loss, totals, concentration, and the sector
+ * allocation so everything stays consistent. Positions with no live price keep
+ * their cached last-close values.
+ */
+function liveAdjust(
+  pf: Portfolio | null,
+  live: Record<string, { price: number | null; changePct: number | null }>,
+): Portfolio | null {
+  if (!pf) return pf;
+  const priced = pf.positions.map((p) => {
+    const lp = live[p.ticker]?.price;
+    if (lp == null || p.shares == null) return { ...p };
+    const marketValue = lp * p.shares;
+    const gainLoss = p.costValue != null ? marketValue - p.costValue : null;
+    return {
+      ...p,
+      price: lp,
+      changePct: live[p.ticker]?.changePct ?? p.changePct,
+      marketValue,
+      gainLoss,
+      gainLossPct:
+        gainLoss != null && p.costValue ? round2((gainLoss / p.costValue) * 100) : p.gainLossPct,
+      notes: liveNotes({ gainLoss, taxAdvantaged: p.taxAdvantaged, serverNotes: p.notes }),
+    };
+  });
+  const totalValue = priced.reduce((s, p) => s + (p.marketValue ?? 0), 0);
+  const unrealized = totalValue && pf.totalCost ? totalValue - pf.totalCost : pf.unrealized;
+
+  const positions = priced
+    .map((p) => ({
+      ...p,
+      concentrationPct:
+        totalValue > 0 && p.marketValue != null
+          ? round1((p.marketValue / totalValue) * 100)
+          : p.concentrationPct,
+    }))
+    .sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0));
+
+  const bySectorMap = new Map<string, SectorAllocation & { value: number }>();
+  for (const p of positions) {
+    const key = p.sector || "Unclassified";
+    const cur = bySectorMap.get(key) ?? { sector: key, value: 0, count: 0, pct: null };
+    cur.value += p.marketValue ?? 0;
+    cur.count += 1;
+    bySectorMap.set(key, cur);
+  }
+  const bySector = [...bySectorMap.values()]
+    .map((s) => ({
+      sector: s.sector,
+      value: round2(s.value),
+      count: s.count,
+      pct: totalValue > 0 ? round1((s.value / totalValue) * 100) : null,
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  return {
+    ...pf,
+    positions,
+    bySector,
+    totalValue: round2(totalValue),
+    unrealized: unrealized != null ? round2(unrealized) : null,
+    unrealizedPct:
+      unrealized != null && pf.totalCost ? round2((unrealized / pf.totalCost) * 100) : pf.unrealizedPct,
+  };
+}
+
 // Holdings page (Phase 3). CSV import, blended positions, concentration,
 // gain/loss, tax-loss + add-on-dip notes, and the per-position tax-advantaged
 // toggle. All arithmetic on top of the existing ticker-level verdict — holdings
@@ -38,7 +139,7 @@ function asOfLabel(iso: string | null): string {
 type HoldingsFilter = "all" | "gainers" | "losers" | "taxloss";
 
 export function HoldingsPage({ onBack }: { onBack: () => void }) {
-  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [portfolioState, setPortfolioState] = useState<Portfolio | null>(null);
   const [macro, setMacro] = useState<{ zone: string; sizingPct: number | null } | null>(null);
   const [ready, setReady] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -46,10 +147,19 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
   const [filter, setFilter] = useState<HoldingsFilter>("all");
   const [sectorFilter, setSectorFilter] = useState<string>("");
 
+  // Live intraday prices from the shared 60s poller (same one the tape and the
+  // answer card use). We overlay them on the server's cached-close snapshot so
+  // the page still loads instantly but the figures track the market.
+  const livePx = useLivePrices(portfolioState ? portfolioState.positions.map((p) => p.ticker) : []);
+  const portfolio = useMemo(
+    () => liveAdjust(portfolioState, livePx),
+    [portfolioState, livePx],
+  );
+
   const load = () =>
     getHoldings()
       .then((r) => {
-        setPortfolio(r.data);
+        setPortfolioState(r.data);
         setMacro(r.macro);
       })
       .catch(() => {})
@@ -60,7 +170,7 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
   }, []);
 
   async function toggleTax(ticker: string, next: boolean) {
-    setPortfolio((p) =>
+    setPortfolioState((p) =>
       p
         ? {
             ...p,
@@ -164,8 +274,9 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
               </>
             )}
             <div className="insight-foot" style={{ textAlign: "left", padding: "2px 18px 10px" }}>
-              {portfolio.count} tracked position{portfolio.count === 1 ? "" : "s"} · re-import
-              anytime after a trade — this isn't meant to stay in sync automatically.
+              <span style={{ color: "var(--up)" }}>●</span> Prices live · {portfolio.count} tracked
+              position{portfolio.count === 1 ? "" : "s"} · re-import anytime after a trade — this
+              isn't meant to stay in sync automatically.
             </div>
             {portfolio.count > 1 && (
               <div className="holdings-filter">
