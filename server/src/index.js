@@ -40,7 +40,7 @@ import {
   runAnalystJob,
 } from "./scheduler.js";
 import { blend } from "./analyst/blender.js";
-import { NAMES } from "./scanner/names.js";
+import { resolveName } from "./scanner/universe.js";
 import { checkAlerts } from "./alerts.js";
 import { RISK_PROFILES, DEFAULT_RISK, normalizeRisk } from "./risk.js";
 import {
@@ -91,7 +91,7 @@ async function watchlistQuotes(tickers) {
   }
   return tickers.map((t) => ({
     ticker: t,
-    name: NAMES[t] ?? null,
+    name: resolveName(t),
     ...priceChangeOf(map[t] ?? getCachedSeries(t)),
   }));
 }
@@ -260,7 +260,7 @@ app.get("/api/scanner", async (_req, res) => {
         price = l.price;
         changePct = l.changePct;
       }
-      return { ...r, name: NAMES[r.ticker] ?? null, price, changePct };
+      return { ...r, name: resolveName(r.ticker), price, changePct };
     }),
   });
 });
@@ -360,7 +360,7 @@ app.get("/api/tape", async (_req, res) => {
         seen.add(r.ticker);
         items.push({
           ticker: r.ticker,
-          name: NAMES[r.ticker] ?? null,
+          name: resolveName(r.ticker),
           ...priceChangeOf(getCachedSeries(r.ticker)),
           source: "scan",
         });
@@ -507,12 +507,12 @@ app.get("/api/holdings", async (_req, res) => {
   try {
     const tickers = heldTickers();
     const priceMap = await holdingsPriceMap(tickers);
-    // Resolve company names: the static NAMES map covers the S&P 500; fill the
-    // rest (ETFs, funds, dual-class shares) from the cache, and fetch any still-
-    // unknown names once via the sidecar (then cached — this only runs the first
-    // time a new ticker is held).
+    // Resolve company names: resolveName covers the S&P 500 (scraped table +
+    // static map); fill the rest (ETFs, funds, non-S&P names) from the sidecar
+    // name cache, and fetch any still-unknown names once via the sidecar (then
+    // cached — this only runs the first time such a ticker is held).
     const names = getCompanyNames(tickers);
-    const unknown = tickers.filter((t) => !names[t] && !NAMES[t]);
+    const unknown = tickers.filter((t) => !names[t] && !resolveName(t));
     if (unknown.length) {
       const fetched = await fetchCompanyNames(unknown);
       if (Object.keys(fetched).length) {

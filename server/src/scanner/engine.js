@@ -1,6 +1,3 @@
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
 import { fetchFundamentals, fetchSeriesMulti } from "../stocks.js";
 import { sma } from "../indicators.js";
 import {
@@ -12,96 +9,18 @@ import {
   buildComposite,
   sectorRanks,
 } from "./factors.js";
-import { sectorOf } from "./sectors.js";
+import { getUniverse, resolveSector, FULL_UNIVERSE } from "./universe.js";
 import { saveScanner, freshSeriesMap, setCachedSeries } from "../db.js";
 
 const PRICE_TTL_MS = 24 * 60 * 60 * 1000;
-// The full S&P 500 is now the default (the Yahoo sidecar batches the universe in
-// one fast call and has no per-symbol rate cap). SCANNER_FULL_UNIVERSE=0 is the
-// escape hatch back to the curated large-cap list if the sidecar ever has to
-// fall back to Twelve Data's 8-req/min pacing for a stretch.
-const FULL_UNIVERSE = process.env.SCANNER_FULL_UNIVERSE !== "0";
 // Universe cap. Defaults high enough for the full S&P 500; on the curated list
 // the old 50-name default still applies. Override with SCANNER_UNIVERSE_SIZE.
 const UNIVERSE_SIZE =
   Number(process.env.SCANNER_UNIVERSE_SIZE) || (FULL_UNIVERSE ? 550 : 50);
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CACHE_DIR = path.join(__dirname, "..", "..", ".cache");
-const UNIVERSE_CACHE = path.join(CACHE_DIR, "sp500.json");
-const UNIVERSE_TTL_MS = 24 * 60 * 60 * 1000;
 // In a REDUCED (cautious) market, show fewer, higher-ranked names — but never an
 // empty list. (The old absolute composite>=75 cutoff filtered everything out,
 // since the composite is a mean of percentile ranks and rarely clears 75.)
 const REDUCED_TOP = 20;
-
-// ~100 largest US names, size-ordered — the curated fallback universe, used
-// when SCANNER_FULL_UNIVERSE=0 or the Wikipedia scrape fails.
-const LARGE_CAP_UNIVERSE = [
-  "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AVGO", "BRK-B", "JPM",
-  "LLY", "V", "UNH", "XOM", "JNJ", "WMT", "MA", "PG", "HD", "COST",
-  "ORCL", "MRK", "ABBV", "CVX", "KO", "PEP", "ADBE", "CRM", "BAC", "NFLX",
-  "AMD", "TMO", "MCD", "CSCO", "ACN", "LIN", "ABT", "DHR", "WFC", "TXN",
-  "QCOM", "INTC", "INTU", "VZ", "IBM", "AMGN", "PM", "CAT", "GE", "NOW",
-  "UNP", "NKE", "COP", "HON", "SPGI", "UBER", "LOW", "GS", "BKNG", "MS",
-  "AXP", "T", "BLK", "PFE", "SCHW", "ISRG", "RTX", "ELV", "PLD", "BA",
-  "SYK", "TJX", "MDT", "GILD", "C", "VRTX", "LMT", "ADP", "MMC", "REGN",
-  "CB", "ETN", "ZTS", "AMT", "MO", "BSX", "CI", "PGR", "SO", "BMY",
-  "DE", "MU", "FI", "DUK", "PANW", "SLB", "APH", "KLAC", "SNPS", "CDNS",
-];
-
-function ensureCacheDir() {
-  if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
-}
-
-/**
- * The scan universe. Default: the full S&P 500, scraped from Wikipedia (cached
- * 24h), falling back to the curated large-cap list on failure.
- * SCANNER_FULL_UNIVERSE=0 forces the curated list.
- */
-export async function getUniverse() {
-  if (!FULL_UNIVERSE) return LARGE_CAP_UNIVERSE;
-  ensureCacheDir();
-  try {
-    const cached = JSON.parse(fs.readFileSync(UNIVERSE_CACHE, "utf8"));
-    if (Date.now() - cached.fetchedAt < UNIVERSE_TTL_MS && cached.tickers?.length) {
-      return cached.tickers;
-    }
-  } catch {
-    /* no cache */
-  }
-  try {
-    const tickers = await scrapeSp500();
-    if (tickers.length >= 400) {
-      fs.writeFileSync(UNIVERSE_CACHE, JSON.stringify({ fetchedAt: Date.now(), tickers }));
-      return tickers;
-    }
-    throw new Error(`only ${tickers.length} tickers scraped`);
-  } catch (err) {
-    console.warn(
-      `[scanner] S&P 500 scrape failed (${
-        err instanceof Error ? err.message : err
-      }); using ${LARGE_CAP_UNIVERSE.length}-name large-cap universe.`,
-    );
-    return LARGE_CAP_UNIVERSE;
-  }
-}
-
-async function scrapeSp500() {
-  const res = await fetch("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", {
-    headers: { "User-Agent": "stock-checker/1.0" },
-  });
-  if (!res.ok) throw new Error(`wiki ${res.status}`);
-  const html = await res.text();
-  const table = html.split('id="constituents"')[1] ?? html;
-  const body = table.split("</table>")[0] ?? "";
-  const tickers = [];
-  for (const row of body.split("<tr>").slice(1)) {
-    const m = row.match(/<td[^>]*>\s*<a[^>]*>([A-Z][A-Z.\-]{0,6})<\/a>/);
-    if (m) tickers.push(m[1].replace(/\./g, "-"));
-  }
-  return [...new Set(tickers)];
-}
 
 // Series for the universe, served from the 24h price cache where possible and
 // back-filled via the provider-agnostic multi-fetch (Twelve Data or spark).
@@ -190,8 +109,9 @@ export async function runScanner({ macroMode = "OFFENSIVE", top = 100 } = {}) {
   let rows = buildComposite(tickers, factorMaps);
   // Sector-relative ranking (Phase 4.2): tag each row with its GICS sector and
   // its rank *within* that sector, so a chip name isn't only judged against a
-  // utility. Sector comes from the static map (null for unmapped names).
-  for (const r of rows) r.sector = sectorOf(r.ticker);
+  // utility. Sector comes from the scraped S&P 500 table (full coverage), with
+  // the static map as a fallback.
+  for (const r of rows) r.sector = resolveSector(r.ticker);
   const sRanks = sectorRanks(rows);
   for (const r of rows) r.sectorRank = sRanks[r.ticker] ?? null;
 
@@ -235,7 +155,7 @@ function fixtureScanner(macroMode) {
   }));
   if (macroMode === "REDUCED") rows = rows.slice(0, REDUCED_TOP);
   rows.forEach((r, i) => (r.rank = i + 1));
-  for (const r of rows) r.sector = sectorOf(r.ticker);
+  for (const r of rows) r.sector = resolveSector(r.ticker);
   const sRanks = sectorRanks(rows);
   for (const r of rows) r.sectorRank = sRanks[r.ticker] ?? null;
   return rows;

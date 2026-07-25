@@ -73,6 +73,17 @@ proactive notifications, trust (backtesting), and deeper analysis.
   is invalid JSON, so Node's parse threw and the check fell through to the plain-Node Yahoo
   path that Yahoo always 429s. The sidecar now drops NaN closes and sanitizes all output.
 
+### Verification (independent pass, `53afb48`)
+
+Clean clone, fresh `npm install`, all three gates pass: 68/68 server tests, `tsc --noEmit`
+clean, `vite build` succeeds (main bundle 620 kB min / 186 kB gzip — past Vite's 500 kB
+warning threshold, worth watching if load time ever becomes noticeable, not urgent for a
+personal LAN tool). Booted with `STOCK_FIXTURES=1` and smoke-tested `/api/holdings`,
+`/api/backtest`, `/api/ha/summary`, `/api/watchlist` — all respond correctly. Confirmed no
+delivery-mechanism text (Home Assistant, notify, push, Resend) appears anywhere in `web/`.
+Found and fixed three stale *Known limitations* entries and added three new ones the
+enhancement pass introduced — see `ARCHITECTURE.md`.
+
 ---
 
 ## 2026-07-25

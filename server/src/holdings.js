@@ -21,8 +21,7 @@ import {
   getSetting,
   setSetting,
 } from "./db.js";
-import { NAMES } from "./scanner/names.js";
-import { sectorOf } from "./scanner/sectors.js";
+import { resolveName, resolveSector } from "./scanner/universe.js";
 
 const UNCLASSIFIED = "Unclassified";
 
@@ -243,8 +242,8 @@ export function buildPortfolio(rawRows, flags, priceMap, { asOf, names = {} } = 
     const signal = localSignal(pm.closes, price);
     return {
       ...p,
-      name: names[p.ticker] ?? NAMES[p.ticker] ?? null,
-      sector: sectorOf(p.ticker) ?? UNCLASSIFIED,
+      name: names[p.ticker] ?? resolveName(p.ticker),
+      sector: resolveSector(p.ticker) ?? UNCLASSIFIED,
       price,
       changePct: pm.changePct ?? null,
       marketValue,

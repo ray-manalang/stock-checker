@@ -17,7 +17,7 @@ import {
   saveWatchlistVerdictState,
 } from "./db.js";
 import { notifyPush } from "./notify.js";
-import { NAMES } from "./scanner/names.js";
+import { resolveName } from "./scanner/universe.js";
 
 function appBaseUrl() {
   return process.env.APP_BASE_URL?.trim().replace(/\/$/, "") || "";
@@ -53,7 +53,7 @@ export async function checkWatchlistSignals() {
     // and hasn't been delivered yet.
     let notifiedAt = signal === "BUY" ? (prev?.notifiedAt ?? null) : null;
     if (signal === "BUY" && newLongs && (!wasBuy || !wasNotified)) {
-      const name = NAMES[ticker] ?? result.quote.name ?? ticker;
+      const name = resolveName(ticker) ?? result.quote.name ?? ticker;
       const base = appBaseUrl();
       const push = await notifyPush({
         title: `${ticker} — good time to buy`,

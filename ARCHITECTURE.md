@@ -1,8 +1,10 @@
 # Architecture — Market Specialist
 
-Technical reference for the `stock-checker` repo. **Baseline: `main` @ `47b3e2a`
-(2026-07-23), plus the 2026-07-25 fix pass** (see [CHANGELOG.md](CHANGELOG.md)). Written
-from source; not verified against the running Home Assistant container.
+Technical reference for the `stock-checker` repo. **Baseline: `main` @ `53afb48`
+(2026-07-25), after the Phases 1–5 enhancement pass** (see [CHANGELOG.md](CHANGELOG.md)).
+Written from source. Independently verified via a clean clone (68/68 server tests,
+`tsc --noEmit`, `vite build`, and a `STOCK_FIXTURES=1` smoke test all pass) — but not
+verified against the running Home Assistant container or a real Holdings CSV import.
 
 ---
 
@@ -289,13 +291,22 @@ judged too fragile. It shares its input series with the VIX Level signal.
 
 ## L2 — Quant scanner
 
-`scanner/engine.js` + `scanner/factors.js` + `scanner/names.js`.
+`scanner/engine.js` + `scanner/factors.js` + `scanner/universe.js`
+(+ `scanner/sp500-table.js`, `scanner/names.js`, `scanner/sectors.js`).
 
-**Universe** — a hardcoded 100-name large-cap list by default. `SCANNER_FULL_UNIVERSE=1`
-scrapes the S&P 500 from Wikipedia instead (requires ≥400 tickers, cached 24 h in
-`server/.cache/sp500.json`, falls back to the hardcoded list on failure). Either way the
-result is sliced to `SCANNER_UNIVERSE_SIZE` (default **50**). `SPY` is fetched for relative
-strength and then removed. Names with fewer than 200 cached closes are dropped.
+**Universe** (`scanner/universe.js`) — the full S&P 500 by default, scraped from Wikipedia
+(requires ≥400 names, cached 24 h in `server/.cache/sp500.json`). `SCANNER_FULL_UNIVERSE=0`
+forces a hardcoded ~100-name large-cap list; the scrape also falls back to it on failure.
+The result is sliced to `SCANNER_UNIVERSE_SIZE` (default **550** full / **50** curated). `SPY`
+is fetched for relative strength and then removed. Names with fewer than 200 cached closes
+are dropped.
+
+**Names + sectors** — the same Wikipedia constituents table carries each name's company
+name and GICS sector; `sp500-table.js` (a pure, unit-tested parser) pulls all three fields
+from every row, cached alongside the tickers. `resolveName`/`resolveSector` check that
+scraped data first, then fall back to the static `names.js`/`sectors.js` maps (which cover
+only the curated list). This gives full-S&P-500 coverage for Top-ranked names and holdings;
+holdings resolves names from here *before* the per-symbol sidecar `names` lookup.
 
 **Factors** (0–100, higher = better)
 
@@ -599,8 +610,14 @@ inferred from the docs.
   no volume, so `volume_surge` drops and the mean is taken over three factors instead of four.
 - **`AnswerCard` is not keyed by ticker**, so the alert price input keeps the previous
   symbol's buy-zone low until the row is reopened.
-- **Currency handling is inconsistent** — the Basic view threads `quote.currency` through,
-  Pro scanner rows hardcode `USD`, and the tape prints no currency symbol at all.
+- **Currency handling is inconsistent** — the Research check view threads `quote.currency`
+  through, scanner rows hardcode `USD`, and the tape prints no currency symbol at all.
+- **`isTradableSymbol` (holdings.js) only excludes a fixed list of known cash-sweep
+  symbols** (`CASH_LIKE`). A brokerage-specific sweep vehicle not on that list (e.g. a
+  ticker like `FCASH` or `MSBNK`) passes the tradability check, imports as a real
+  position, and its price lookup then fails quietly (`price: null`) rather than being
+  skipped like a recognized cash symbol — it clutters Holdings instead of disappearing
+  cleanly. Extend `CASH_LIKE` as new sweep names turn up.
 
 **Operational**
 
@@ -612,18 +629,23 @@ inferred from the docs.
   batch. Nothing in the app has auth; it is intended for LAN use only.
 - **`computeBreadth` output is discarded** — the scanner computes market breadth and throws
   it away; the macro signal re-fetches its own 20-name sample.
+- **`express.json()` has no explicit body-size limit override**, so `/api/holdings/import`
+  relies on Express's default 100 kb cap. The verified sample export (~160 rows, 34 kb) is
+  well under it, but a much larger multi-account CSV could hit the ceiling.
 
 **Cosmetic / dead code**
 
-
 - `price_cache.indicators_json` is declared and never used.
-- `api.ts` exports `getAlerts()` and `getWatchlistQuotes()` that nothing calls. There is
-  **no UI to list or manage existing alerts** — only to create one.
+- `api.ts` exports `getWatchlistQuotes()` that nothing calls (`getAlerts()` is no longer
+  dead — Phase 1.3's `AlertsPanel` uses it).
+- `HoldingsResponse.demo: boolean` (`web/src/api.ts`) is vestigial: Phase 3.4's demo-mode
+  toggle was built and then cut before shipping (see CHANGELOG's 2026-07-25 entry), and the
+  server's `/api/holdings` never actually sends this field. Either finish 3.4 or drop the
+  field.
 - No UI path passes `deep=0` to `/api/check`, though the API supports it.
 - `language.js` exports `macroWord()`, which no server module calls.
-- The 100-name universe list and the ticker→name map must be kept in sync by hand; symbols
-  outside the map render as a bare ticker.
 
 *Fixed on 2026-07-25 and removed from this list: the dead short-interest factor, UTC cron
-drift, the per-request fundamentals subprocess, the unused Google Fonts, and the orphaned
-`App.css`. See [CHANGELOG.md](CHANGELOG.md).*
+drift, the per-request fundamentals subprocess, the unused Google Fonts, the orphaned
+`App.css`, and the missing alert-management UI (Phase 1.3 added `AlertsPanel` + `PUT
+/api/alerts/:id`). See [CHANGELOG.md](CHANGELOG.md).*
