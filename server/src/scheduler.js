@@ -7,6 +7,7 @@ import { computeMacro } from "./macro/compute.js";
 import { runScanner } from "./scanner/engine.js";
 import { scoreAnalyst } from "./analyst/analyzer.js";
 import { checkAlerts } from "./alerts.js";
+import { checkWatchlistSignals } from "./watchlistSignals.js";
 import { latestMacro, latestScanner } from "./db.js";
 import { llmConfigured } from "./llm.js";
 
@@ -55,6 +56,12 @@ export function runAlertsJob() {
   return guard("checkAlerts", () => checkAlerts());
 }
 
+// Watchlist buy-signal scan — once daily near the close (Phase 2.2). Notifies
+// only on a fresh transition into "Good time to buy", macro permitting.
+export function runWatchlistSignalsJob() {
+  return guard("checkWatchlistSignals", () => checkWatchlistSignals());
+}
+
 // Market-clock jobs are pinned to US market time so they don't drift with DST
 // (and don't silently run mid-afternoon ET when the container's clock is UTC).
 const MARKET_TZ = process.env.MARKET_TZ || "America/New_York";
@@ -69,6 +76,9 @@ export function startScheduler() {
   cron.schedule("0 3 * * 0", () => runAnalystJob(), inMarketTz);
   // Buy-zone alerts ~ every 10 minutes during the day.
   cron.schedule("*/10 * * * *", () => runAlertsJob());
+  // Watchlist buy-signals once daily at 16:10 ET — just after the close, near
+  // the scanner's time-of-day but over the watchlist rather than the universe.
+  cron.schedule("10 16 * * 1-5", () => runWatchlistSignalsJob(), inMarketTz);
 
   // Kick initial computes on boot if the tables are empty (background).
   if (!latestMacro()) runMacro();

@@ -20,7 +20,7 @@ const VERDICT_LABEL = {
  * deterministic and instant; the deep-dive enriches the response when a Claude
  * key is available and never blocks the core answer.
  */
-export async function analyzeTicker(ticker, { deep = true, fresh = false } = {}) {
+export async function analyzeTicker(ticker, { deep = true, fresh = false, buyZoneScale = 1 } = {}) {
   const { quote, series } = await fetchChart(ticker);
 
   // Benchmark for relative strength (best-effort — never fail the whole call).
@@ -89,11 +89,13 @@ export async function analyzeTicker(ticker, { deep = true, fresh = false } = {})
     verdict = det.verdict;
     confidence = det.confidence;
     why = det.why;
-    buyZone = suggestBuyZone(quote.price, quote.low52, quote.high52);
+    buyZone = suggestBuyZone(quote.price, quote.low52, quote.high52, buyZoneScale);
   }
 
   return {
     quote,
+    // Dividend awareness (Phase 4.3) — yield as a fraction, or null.
+    dividendYield: fundamentals?.dividendYield ?? null,
     series: { timestamp: series.timestamp, close: series.close },
     indicators,
     glance,

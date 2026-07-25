@@ -62,6 +62,7 @@ export type Analysis = {
 
 export type CheckResponse = {
   quote: Quote;
+  dividendYield?: number | null;
   series: { timestamp: number[]; close: number[] };
   indicators: Indicators;
   glance: Glance;

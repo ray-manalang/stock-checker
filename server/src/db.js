@@ -85,8 +85,228 @@ export function db() {
       cost REAL DEFAULT 0,
       created_at TEXT NOT NULL
     );
+    -- Append-only history of every verdict issued, for Phase 4 backtesting.
+    -- Distinct from recent_checks (which keeps only the latest row per ticker).
+    CREATE TABLE IF NOT EXISTS verdict_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticker TEXT NOT NULL,
+      verdict TEXT NOT NULL,
+      label TEXT,
+      confidence INTEGER,
+      price REAL,
+      source TEXT,
+      created_at TEXT NOT NULL
+    );
+    -- Per-watchlist-ticker last verdict, so the daily buy-signal job only
+    -- notifies on the transition *into* "Good time to buy".
+    CREATE TABLE IF NOT EXISTS watchlist_verdict_state (
+      ticker TEXT PRIMARY KEY,
+      last_verdict TEXT,
+      last_label TEXT,
+      last_checked_at TEXT,
+      notified_at TEXT
+    );
+    -- Imported portfolio positions. Replaced wholesale on each CSV import
+    -- (snapshot, not a transaction log). One row per (ticker, source).
+    CREATE TABLE IF NOT EXISTS holdings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticker TEXT NOT NULL,
+      shares REAL,
+      cost_basis REAL,
+      source TEXT,
+      imported_at TEXT NOT NULL
+    );
+    -- Manual per-ticker metadata that must survive a re-import (the
+    -- tax-advantaged toggle from Phase 3.3). Keyed by ticker, not wiped.
+    CREATE TABLE IF NOT EXISTS holdings_flags (
+      ticker TEXT PRIMARY KEY,
+      tax_advantaged INTEGER DEFAULT 0,
+      updated_at TEXT
+    );
+    -- Small key/value store for server-side settings (risk tolerance, demo
+    -- mode, remembered CSV column mapping, holdings as-of date).
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at TEXT
+    );
   `);
+  // Additive column migrations (safe on existing DBs — ignore "duplicate column").
+  for (const ddl of [
+    `ALTER TABLE scanner_results ADD COLUMN sector TEXT`,
+    `ALTER TABLE scanner_results ADD COLUMN sector_rank INTEGER`,
+  ]) {
+    try {
+      _db.exec(ddl);
+    } catch {
+      /* column already exists */
+    }
+  }
   return _db;
+}
+
+// ---------- settings (key/value) ----------
+export function getSetting(key, fallback = null) {
+  const row = db().prepare(`SELECT value FROM settings WHERE key = ?`).get(key);
+  if (!row) return fallback;
+  try {
+    return JSON.parse(row.value);
+  } catch {
+    return row.value;
+  }
+}
+
+export function setSetting(key, value) {
+  db()
+    .prepare(
+      `INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)`,
+    )
+    .run(key, JSON.stringify(value), new Date().toISOString());
+  return value;
+}
+
+// ---------- verdict log (append-only history) ----------
+export function logVerdict({ ticker, verdict, label, confidence, price, source }) {
+  db()
+    .prepare(
+      `INSERT INTO verdict_log (ticker, verdict, label, confidence, price, source, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      ticker,
+      verdict,
+      label ?? null,
+      confidence ?? null,
+      price ?? null,
+      source ?? null,
+      new Date().toISOString(),
+    );
+}
+
+/** All logged verdicts at least `minAgeMs` old (candidates for grading). */
+export function verdictsOlderThan(minAgeMs) {
+  const cutoff = new Date(Date.now() - minAgeMs).toISOString();
+  return db()
+    .prepare(
+      `SELECT id, ticker, verdict, confidence, price, source, created_at
+       FROM verdict_log WHERE created_at <= ? ORDER BY created_at ASC`,
+    )
+    .all(cutoff)
+    .map((r) => ({
+      id: r.id,
+      ticker: r.ticker,
+      verdict: r.verdict,
+      confidence: r.confidence,
+      price: r.price,
+      source: r.source,
+      createdAt: r.created_at,
+    }));
+}
+
+/** Count of logged verdicts + timestamp of the earliest (for the report header). */
+export function verdictLogStats() {
+  const row = db()
+    .prepare(`SELECT COUNT(*) AS n, MIN(created_at) AS since FROM verdict_log`)
+    .get();
+  return { count: row.n, since: row.since };
+}
+
+// ---------- watchlist verdict state ----------
+export function getWatchlistVerdictState(ticker) {
+  const r = db()
+    .prepare(`SELECT * FROM watchlist_verdict_state WHERE ticker = ?`)
+    .get(ticker);
+  if (!r) return null;
+  return {
+    ticker: r.ticker,
+    lastVerdict: r.last_verdict,
+    lastLabel: r.last_label,
+    lastCheckedAt: r.last_checked_at,
+    notifiedAt: r.notified_at,
+  };
+}
+
+export function listWatchlistVerdictState() {
+  return db()
+    .prepare(`SELECT * FROM watchlist_verdict_state`)
+    .all()
+    .map((r) => ({
+      ticker: r.ticker,
+      lastVerdict: r.last_verdict,
+      lastLabel: r.last_label,
+      lastCheckedAt: r.last_checked_at,
+      notifiedAt: r.notified_at,
+    }));
+}
+
+export function saveWatchlistVerdictState({ ticker, lastVerdict, lastLabel, notifiedAt }) {
+  const at = new Date().toISOString();
+  // notified_at is written verbatim (including null) so the job can clear it
+  // when a BUY episode ends.
+  db()
+    .prepare(
+      `INSERT INTO watchlist_verdict_state (ticker, last_verdict, last_label, last_checked_at, notified_at)
+       VALUES (@ticker, @lastVerdict, @lastLabel, @at, @notifiedAt)
+       ON CONFLICT(ticker) DO UPDATE SET
+         last_verdict = @lastVerdict,
+         last_label = @lastLabel,
+         last_checked_at = @at,
+         notified_at = @notifiedAt`,
+    )
+    .run({ ticker, lastVerdict, lastLabel: lastLabel ?? null, at, notifiedAt: notifiedAt ?? null });
+}
+
+export function removeWatchlistVerdictState(ticker) {
+  db().prepare(`DELETE FROM watchlist_verdict_state WHERE ticker = ?`).run(ticker);
+}
+
+// ---------- holdings ----------
+/** Replace all holdings wholesale (snapshot import). `rows` = [{ticker, shares, costBasis, source}]. */
+export function replaceHoldings(rows, asOf) {
+  const at = new Date().toISOString();
+  const insert = db().prepare(
+    `INSERT INTO holdings (ticker, shares, cost_basis, source, imported_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+  const tx = db().transaction((list) => {
+    db().prepare(`DELETE FROM holdings`).run();
+    for (const r of list) {
+      insert.run(r.ticker, r.shares ?? null, r.costBasis ?? null, r.source ?? null, at);
+    }
+  });
+  tx(rows);
+  setSetting("holdingsAsOf", asOf ?? at);
+  return at;
+}
+
+/** Raw holdings rows (one per ticker+source), as stored. */
+export function listHoldingsRaw() {
+  return db()
+    .prepare(`SELECT ticker, shares, cost_basis, source FROM holdings ORDER BY ticker ASC`)
+    .all()
+    .map((r) => ({
+      ticker: r.ticker,
+      shares: r.shares,
+      costBasis: r.cost_basis,
+      source: r.source,
+    }));
+}
+
+export function holdingsFlags() {
+  const out = {};
+  for (const r of db().prepare(`SELECT ticker, tax_advantaged FROM holdings_flags`).all()) {
+    out[r.ticker] = { taxAdvantaged: !!r.tax_advantaged };
+  }
+  return out;
+}
+
+export function setHoldingFlag(ticker, taxAdvantaged) {
+  db()
+    .prepare(
+      `INSERT OR REPLACE INTO holdings_flags (ticker, tax_advantaged, updated_at)
+       VALUES (?, ?, ?)`,
+    )
+    .run(ticker, taxAdvantaged ? 1 : 0, new Date().toISOString());
 }
 
 // ---------- macro ----------
@@ -120,8 +340,8 @@ export function saveScanner(rows, macroMode) {
   const at = new Date().toISOString();
   const insert = db().prepare(
     `INSERT OR REPLACE INTO scanner_results
-       (ticker, composite, factors_json, rank, macro_mode, computed_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+       (ticker, composite, factors_json, rank, macro_mode, computed_at, sector, sector_rank)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const tx = db().transaction((list) => {
     for (const r of list) {
@@ -132,6 +352,8 @@ export function saveScanner(rows, macroMode) {
         r.rank,
         macroMode,
         at,
+        r.sector ?? null,
+        r.sectorRank ?? null,
       );
     }
     db()
@@ -151,7 +373,7 @@ export function latestScanner(limit = 50) {
   if (!run) return null;
   const rows = db()
     .prepare(
-      `SELECT ticker, composite, factors_json, rank FROM scanner_results
+      `SELECT ticker, composite, factors_json, rank, sector, sector_rank FROM scanner_results
        WHERE computed_at = ? ORDER BY rank ASC LIMIT ?`,
     )
     .all(run.computed_at, limit)
@@ -159,6 +381,8 @@ export function latestScanner(limit = 50) {
       ticker: r.ticker,
       composite: r.composite,
       rank: r.rank,
+      sector: r.sector ?? null,
+      sectorRank: r.sector_rank ?? null,
       factors: r.factors_json ? JSON.parse(r.factors_json) : {},
     }));
   return { rows, macroMode: run.macro_mode, computedAt: run.computed_at };
@@ -394,6 +618,16 @@ export function addAlert({ ticker, targetLow, targetHigh }) {
 
 export function removeAlert(id) {
   db().prepare(`DELETE FROM alerts WHERE id = ?`).run(id);
+}
+
+/** Edit an active alert's targets and re-arm it. */
+export function updateAlert(id, { targetLow, targetHigh }) {
+  db()
+    .prepare(
+      `UPDATE alerts SET target_low = ?, target_high = ?, status = 'active', triggered_at = NULL
+       WHERE id = ?`,
+    )
+    .run(targetLow ?? null, targetHigh ?? null, id);
 }
 
 export function markAlertTriggered(id) {

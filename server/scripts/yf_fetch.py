@@ -210,11 +210,20 @@ def cmd_fundamentals(symbol):
     # Short interest, for the opt-in scanner factor. Lives on .info (not
     # fast_info) and is missing for plenty of names — fail soft to None.
     short_ratio = None
+    sector = None
+    dividend_yield = None
     try:
         info = tk.get_info()
         raw = info.get("shortRatio")
         if raw is not None:
             short_ratio = round(float(raw), 4)
+        sector = info.get("sector") or None
+        dy = info.get("dividendYield")
+        if dy is not None:
+            # yfinance sometimes reports yield as a percent (1.2) and sometimes
+            # as a fraction (0.012) — normalize to a fraction.
+            dy = float(dy)
+            dividend_yield = round(dy / 100 if dy > 1 else dy, 5)
     except Exception:
         short_ratio = None
 
@@ -239,6 +248,8 @@ def cmd_fundamentals(symbol):
     return {
         "quarterEnd": quarter_end,
         "shortRatio": short_ratio,
+        "sector": sector,
+        "dividendYield": dividend_yield,
         "financials": financials,
     }
 

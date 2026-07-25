@@ -103,8 +103,19 @@ good snapshot in place and the UI labels it stale.
 | GET | `/api/news/videos` | `?force=1` bypasses cache | `{ data: CnbcVideo[] }` — 5-min cache · 502 if no cache and upstream fails |
 | GET | `/api/alerts` | — | `{ data: Alert[] }` |
 | POST | `/api/alerts` | body `{ ticker, targetLow?, targetHigh? }` | `{ ok, alert, data }` · 400 if no ticker or no usable target |
+| PUT | `/api/alerts/:id` | body `{ targetLow?, targetHigh? }` | `{ ok, data }` — edit + re-arm · 400 if no usable target |
 | DELETE | `/api/alerts/:id` | — | `{ ok, data }` |
 | POST | `/api/alerts/check` | — | `{ ok, checked, triggered }` — runs synchronously |
+| GET | `/api/settings` | — | `{ riskTolerance, riskProfiles }` |
+| PUT | `/api/settings` | body `{ riskTolerance? }` | `{ ok, riskTolerance }` |
+| GET | `/api/watchlist/signals` | — | `{ data: WatchSignal[] }` — per-ticker last verdict + notify state |
+| POST | `/api/watchlist/signals/check` | — | `{ ok, checked, notified }` — runs the daily scan now |
+| GET | `/api/holdings` | — | `{ data: Portfolio, macro }` — rolled-up positions with gain/loss, concentration %, notes |
+| POST | `/api/holdings/preview` | body `{ csv }` | `{ data: { headers, sample, rowCount, suggestedMapping } }` |
+| POST | `/api/holdings/import` | body `{ csv, mapping, asOf? }` | `{ ok, imported, positions, skipped, skippedSymbols, asOf }` |
+| POST | `/api/holdings/:ticker/tax` | body `{ taxAdvantaged }` | `{ ok }` — per-position flag (survives re-import) |
+| GET | `/api/ha/summary` | — | `{ zone, composite, sizingPct, newLongs, oneLiner, asOf }` — for a passive HA tile |
+| GET | `/api/backtest` | `?window=90` | `{ data: { windowDays, logged, graded, ready, overall, buckets } }` |
 | POST | `/api/refresh/:layer` | `macro` \| `scanner` \| `analyst` | `{ ok, layer, started }` — fires in the background, returns immediately · 404 on unknown layer |
 | GET | `/*` (non-`/api/`) | — | `index.html` — only when `STATIC_DIR` is set |
 
@@ -144,6 +155,7 @@ UTC container. The interval jobs are timezone-independent.
 | `runScanner` | `15 21 * * *` **ET** | nightly 21:15 ET | `scanner_results`, `scanner_run`, `price_cache` |
 | `scoreAnalyst` | `0 3 * * 0` **ET** | Sundays 03:00 ET | `analyst_scores`, `llm_usage` |
 | `checkAlerts` | `*/10 * * * *` | every 10 min | `alerts` (status) |
+| `checkWatchlistSignals` | `10 16 * * 1-5` **ET** | weekdays 16:10 ET | `watchlist_verdict_state`; pushes via HA on fresh BUY transitions |
 
 - A module-level `Set` guards against concurrent runs of the same job name; a second
   trigger while one is in flight is a no-op. Logs `[job] <name> ok` / `[job] <name> failed: …`.
@@ -166,7 +178,7 @@ on the `stock-checker-data` named volume.
 | Table | Key columns | Written by | Read by |
 |---|---|---|---|
 | `macro_snapshot` | `id`, `composite`, `zone`, `signals_json`, `meta_json`, `computed_at` | macro job | `/api/macro`, scanner job, boot check |
-| `scanner_results` | PK `(ticker, computed_at)`, `composite`, `factors_json`, `rank`, `macro_mode` | scanner job (one transaction) | `/api/scanner` |
+| `scanner_results` | PK `(ticker, computed_at)`, `composite`, `factors_json`, `rank`, `macro_mode`, `sector`, `sector_rank` | scanner job (one transaction) | `/api/scanner` |
 | `scanner_run` | `id`, `macro_mode`, `count`, `computed_at` | scanner job | `/api/scanner`, boot check |
 | `analyst_scores` | PK `(ticker, quarter_end)`, `dimensions_json`, `fundamental_score`, `model` | analyst batch, deep-dive save | scanner blend, check pipeline |
 | `price_cache` | PK `ticker`, `series_json`, `fetched_at` | macro, scanner, watchlist quotes | anything needing cached OHLCV |
@@ -174,6 +186,14 @@ on the `stock-checker-data` named volume.
 | `alerts` | `id`, `ticker`, `target_low`, `target_high`, `status`, `triggered_at` | alert routes, alert job | `/api/alerts` |
 | `recent_checks` | PK `ticker`, `verdict_label`, `verdict_tone`, `price`, `llm`, `checked_at` | every `/api/check` | `/api/checks` |
 | `llm_usage` | `id`, `kind`, `model`, `input_tokens`, `output_tokens`, `cost` | every Claude call | `/api/usage` |
+| `verdict_log` | `id`, `ticker`, `verdict`, `confidence`, `price`, `source`, `created_at` | every `/api/check` (append-only) | `/api/backtest` |
+| `watchlist_verdict_state` | PK `ticker`, `last_verdict`, `last_label`, `last_checked_at`, `notified_at` | `checkWatchlistSignals` | `/api/watchlist/signals` |
+| `holdings` | `id`, `ticker`, `shares`, `cost_basis`, `source`, `imported_at` | CSV import (replace-all) | `/api/holdings` |
+| `holdings_flags` | PK `ticker`, `tax_advantaged` | tax toggle (survives re-import) | `/api/holdings` |
+| `settings` | PK `key`, `value` (JSON) | `/api/settings`, holdings import | risk tolerance, CSV mapping, holdings as-of |
+
+Two additive column migrations (`scanner_results.sector`, `.sector_rank`) run as guarded
+`ALTER TABLE` statements on boot, so existing DBs pick them up without a migration system.
 
 `llm_usage.kind` is one of `deep_dive`, `analyst`, `analyst_batch`. `usageThisMonth()` sums
 from the first of the current UTC month.
@@ -469,8 +489,15 @@ known price.
 **Timers running concurrently**: live prices 60 s · tape reload 60 s · macro+scanner poll
 30 s · CNBC 5 min.
 
+**Views** (`App.tsx`): the former Basic/Pro toggle is gone — the ex-Pro layout (macro,
+scanner, CNBC) is the only screen, with the check tool inline below it. Nav switches between
+`main`, `holdings` (`HoldingsPage.tsx`), and `compare` (`CompareView.tsx`). A `?check=SYM`
+query param deep-links a ticker (used by HA notifications).
+
 **Client-side persistence** is three localStorage keys only: `changeMode` (`pct`/`abs`),
-`macroCollapsed`, `scannerCollapsed`. Watchlist, alerts, and recent checks live server-side.
+`macroCollapsed`, `scannerCollapsed`. Risk tolerance is **server-side** (`settings` table)
+since it drives server math; watchlist, alerts, holdings, and recent checks also live
+server-side.
 
 **Glossary** (`lib/glossary.ts`) is the single source for all 19 ⓘ explanations — the
 analyst dimension copy is the one exception and lives in `ProView.tsx`.
@@ -516,15 +543,19 @@ of an icon library. Card anatomy: `insight-card` → `insight-head` / `insight-d
 | `YF_PYTHON` | `python3` | Interpreter for the yfinance sidecar |
 | `YF_DISABLE` | unset | `=1` disables the sidecar entirely |
 | `TWELVE_DATA_API_KEY` | unset | Enables the Twelve Data tier (chart + multi, with volume) |
-| `STOCK_FIXTURES` | unset | `=1` serves synthetic data for charts, macro, and scanner |
+| `STOCK_FIXTURES` | unset | `=1` serves synthetic data end-to-end (charts, macro, scanner, quotes/multi, holdings) |
 | `STOCK_FIXTURES_FALLBACK` | unset | `=1` falls back to fixtures only after every live source fails |
-| `SCANNER_UNIVERSE_SIZE` | `50` | How many names the scanner ranks |
-| `SCANNER_FULL_UNIVERSE` | unset | `=1` scrapes the full S&P 500 from Wikipedia (24 h cache) |
+| `SCANNER_FULL_UNIVERSE` | on | Full S&P 500 (Wikipedia, 24 h cache) by default; `=0` forces the curated large-cap list |
+| `SCANNER_UNIVERSE_SIZE` | `550` / `50` | Universe cap (550 full, 50 curated) |
 | `SCANNER_SHORT_INTEREST` | unset | `=1` adds the short-interest factor (one sidecar subprocess per ticker) |
-| `MARKET_TZ` | `America/New_York` | Timezone for the nightly scanner and weekly analyst crons |
+| `MARKET_TZ` | `America/New_York` | Timezone for the scanner, analyst, and watchlist-signal crons |
 | `RESEND_API_KEY` | unset | Enables alert email |
 | `ALERT_EMAIL` | unset | Alert recipient (required alongside the key) |
 | `ALERT_FROM` | `Stock Checker <onboarding@resend.dev>` | From header; compose overrides to `Market Specialist <…>` |
+| `HA_BASE_URL` | unset | Home Assistant base URL — enables watchlist buy-signal push |
+| `HA_TOKEN` | unset | HA long-lived access token (required alongside the URL) |
+| `HA_NOTIFY_SERVICE` | `notify` | The `notify.<service>` to call (e.g. `mobile_app_your_phone`) |
+| `APP_BASE_URL` | unset | This app's URL, for deep-linking notifications into a ticker's check view |
 
 `server/.env` is loaded via `dotenv/config` at the top of `index.js`. See
 `server/.env.example` for the annotated template.

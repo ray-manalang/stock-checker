@@ -93,8 +93,9 @@ exception, inline in `ProView.tsx`).
 - Design system: dark-only, **system font stack** (`--font` in `index.css` — no web fonts,
   deliberately), `tabular-nums` on figures. Tokens ported from Minset (`--bg:#000`, `--surface:#0e0e0f`, `--radius:18px`,
   `--maxw:900px`, iOS up/down colors).
-- Client persistence is three localStorage keys only (`changeMode`, `macroCollapsed`,
-  `scannerCollapsed`); everything else is server-side SQLite.
+- Client persistence is three localStorage keys (`changeMode`, `macroCollapsed`,
+  `scannerCollapsed`); everything else — including risk tolerance (the `settings` table) —
+  is server-side SQLite.
 - Snapshot endpoints return HTTP 200 with `data: null` before the first run — handle the
   null, don't expect a 404.
 - `STOCK_FIXTURES=1` serves deterministic demo data (never used unless opted in).

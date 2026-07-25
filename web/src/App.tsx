@@ -7,16 +7,25 @@ import {
   createAlert,
   getUsage,
   getRecentChecks,
+  getSettings,
+  updateSettings,
+  getHoldings,
   type Usage,
   type RecentCheck,
+  type RiskTolerance,
+  type Portfolio,
 } from "./api";
 import { useLivePrices } from "./livePrices";
 import type { CheckResponse, Tone, Word } from "./types";
 import { InfoTip } from "./components/InfoTip";
 import { PriceChart } from "./components/PriceChart";
-import { SegmentedControl } from "./components/SegmentedControl";
 import { ProView } from "./ProView";
 import { TickerTape } from "./TickerTape";
+import { WatchingToBuy } from "./WatchingToBuy";
+import { AlertsPanel } from "./AlertsPanel";
+import { BacktestCard } from "./BacktestCard";
+import { HoldingsPage } from "./HoldingsPage";
+import { CompareView } from "./CompareView";
 import { GLOSSARY } from "./lib/glossary";
 import { money, num, pct, pointStr, type ChangeMode } from "./lib/format";
 
@@ -24,8 +33,11 @@ function toneClass(t: Tone): string {
   return t;
 }
 
+type View = "main" | "holdings" | "compare";
+
 export default function App() {
-  const [mode, setMode] = useState<"simple" | "pro">("simple");
+  const [view, setView] = useState<View>("main");
+  const [risk, setRisk] = useState<RiskTolerance>("balanced");
   const [ticker, setTicker] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,12 +59,46 @@ export default function App() {
     });
 
   const refreshRecent = () => getRecentChecks().then(setRecent).catch(() => {});
-  useEffect(() => {
+  const refreshWatchlist = () =>
     getWatchlist()
       .then((w) => setWatchlist(w.map((x) => x.ticker)))
       .catch(() => {});
+  useEffect(() => {
+    refreshWatchlist();
     refreshRecent();
   }, []);
+
+  // Load server settings (risk tolerance).
+  useEffect(() => {
+    getSettings()
+      .then((s) => setRisk(s.riskTolerance))
+      .catch(() => {});
+  }, []);
+
+  // Deep-link: a notification (or shared URL) can carry ?check=TICKER to open a
+  // ticker's check view directly.
+  useEffect(() => {
+    const sym = new URLSearchParams(window.location.search).get("check");
+    if (sym) {
+      setTicker(sym.toUpperCase());
+      run(sym);
+      // Clear the param so a refresh doesn't re-trigger.
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function changeRisk(next: RiskTolerance) {
+    setRisk(next);
+    try {
+      await updateSettings({ riskTolerance: next });
+      // Re-run the current ticker so the buy-zone width reflects the new risk.
+      if (data) run(data.quote.ticker);
+    } catch {
+      /* ignore */
+    }
+  }
+
 
   const refreshUsage = () => getUsage().then(setUsage).catch(() => {});
   useEffect(() => {
@@ -120,25 +166,43 @@ export default function App() {
 
   return (
     <>
-    <div className={`page${mode === "pro" ? " pro" : ""}`}>
+    <div className="page">
       <nav className="nav">
         <div className="brand">
           Market Specialist<span className="dot">.</span>
         </div>
-        <SegmentedControl
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: "simple", label: "Basic" },
-            { value: "pro", label: "Pro" },
-          ]}
-        />
+        <div className="nav-links">
+          <button
+            className={`nav-link${view === "main" ? " active" : ""}`}
+            onClick={() => setView("main")}
+          >
+            Home
+          </button>
+          <button
+            className={`nav-link${view === "holdings" ? " active" : ""}`}
+            onClick={() => setView("holdings")}
+          >
+            Holdings
+          </button>
+          <button
+            className={`nav-link${view === "compare" ? " active" : ""}`}
+            onClick={() => setView("compare")}
+          >
+            Compare
+          </button>
+        </div>
       </nav>
 
-      <div className={mode === "pro" ? "pro-dashboard" : "check-wrap"}>
-      {mode === "pro" && (
-        <ProView changeMode={changeMode} onToggleChangeMode={toggleChangeMode} />
-      )}
+      {view === "holdings" && <HoldingsPage onBack={() => setView("main")} />}
+      {view === "compare" && <CompareView onBack={() => setView("main")} />}
+
+      <div className="pro-dashboard" style={{ display: view === "main" ? undefined : "none" }}>
+      <ProView
+        changeMode={changeMode}
+        onToggleChangeMode={toggleChangeMode}
+        risk={risk}
+        onRiskChange={changeRisk}
+      />
 
       <div className="check-col">
       <div className="check-tool">
@@ -285,6 +349,14 @@ export default function App() {
         />
       )}
 
+      <WatchingToBuy onOpen={(t) => run(t)} />
+
+      <HoldingsTeaser onOpen={() => setView("holdings")} />
+
+      <AlertsPanel />
+
+      <BacktestCard />
+
       {usage?.llm && (
         <div
           className="center muted"
@@ -295,7 +367,7 @@ export default function App() {
         </div>
       )}
       </div>{/* check-col */}
-      </div>{/* pro-dashboard / check-wrap */}
+      </div>{/* pro-dashboard */}
     </div>
     <TickerTape
       watchlist={watchlist}
@@ -500,6 +572,16 @@ function AnswerCard({
             <Metric k="Ups & downs" info="updowns" v={glance.volatility.word} />
             <Metric k="From its high" info="fromhigh" v={glance.drawdown.word} />
           </div>
+          {data.dividendYield != null && data.dividendYield > 0 && (
+            <p className="muted" style={{ marginTop: 14, fontSize: 13 }}>
+              Dividend yield: <strong>{(data.dividendYield * 100).toFixed(2)}%</strong>{" "}
+              <InfoTip
+                title="Dividend yield"
+                text="The annual dividend as a percent of the current price. A steadier income stream that matters more to long-term holders than to short-term traders."
+                label="dividend yield"
+              />
+            </p>
+          )}
           {analysis && (
             <p className="muted" style={{ marginTop: 14, fontSize: 13 }}>
               Fundamental quality: <strong>{analysis.fundamental_score}/10</strong> ·
@@ -558,6 +640,59 @@ function WhyExpander({ data }: { data: CheckResponse }) {
         </div>
       </div>
     </details>
+  );
+}
+
+// Home-page holdings teaser — a two-cell summary that links to the full page.
+function HoldingsTeaser({ onOpen }: { onOpen: () => void }) {
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let live = true;
+    getHoldings()
+      .then((r) => live && setPortfolio(r.data))
+      .catch(() => {})
+      .finally(() => live && setReady(true));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const has = portfolio && portfolio.count > 0;
+  return (
+    <div className="insight-card">
+      <div className="insight-head">
+        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+          <h3>Your holdings</h3>
+          <span className="new-badge">NEW</span>
+        </div>
+        <button className="btn-ghost btn-sm" onClick={onOpen}>
+          {has ? "View holdings →" : "Import →"}
+        </button>
+      </div>
+      {has ? (
+        <div className="insight-cells" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+          <div className="insight-cell">
+            <div className="label">Total value</div>
+            <div className="val">{money(portfolio!.totalValue)}</div>
+          </div>
+          <div className="insight-cell">
+            <div className="label">Unrealized</div>
+            <div className={`val ${(portfolio!.unrealized ?? 0) >= 0 ? "up" : "down"}`}>
+              {portfolio!.unrealized == null
+                ? "—"
+                : `${portfolio!.unrealized >= 0 ? "+" : "−"}${money(Math.abs(portfolio!.unrealized))}`}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="insight-foot" style={{ paddingTop: 6 }}>
+          {ready
+            ? "See what you own alongside the verdicts — import an aggregated positions CSV to personalize the app."
+            : "Loading…"}
+        </div>
+      )}
+    </div>
   );
 }
 

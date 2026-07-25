@@ -10,14 +10,21 @@ import {
   high52Factor,
   shortInterestFactor,
   buildComposite,
+  sectorRanks,
 } from "./factors.js";
+import { sectorOf } from "./sectors.js";
 import { saveScanner, freshSeriesMap, setCachedSeries } from "../db.js";
 
 const PRICE_TTL_MS = 24 * 60 * 60 * 1000;
-// Cap the scanned universe to fit the data provider's free tier (Twelve Data:
-// 800 credits/day, 8/min → ~8s per symbol). 50 names ≈ a ~7-minute first run,
-// then cached 24h. Override with SCANNER_UNIVERSE_SIZE.
-const UNIVERSE_SIZE = Number(process.env.SCANNER_UNIVERSE_SIZE) || 50;
+// The full S&P 500 is now the default (the Yahoo sidecar batches the universe in
+// one fast call and has no per-symbol rate cap). SCANNER_FULL_UNIVERSE=0 is the
+// escape hatch back to the curated large-cap list if the sidecar ever has to
+// fall back to Twelve Data's 8-req/min pacing for a stretch.
+const FULL_UNIVERSE = process.env.SCANNER_FULL_UNIVERSE !== "0";
+// Universe cap. Defaults high enough for the full S&P 500; on the curated list
+// the old 50-name default still applies. Override with SCANNER_UNIVERSE_SIZE.
+const UNIVERSE_SIZE =
+  Number(process.env.SCANNER_UNIVERSE_SIZE) || (FULL_UNIVERSE ? 550 : 50);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = path.join(__dirname, "..", "..", ".cache");
@@ -28,9 +35,8 @@ const UNIVERSE_TTL_MS = 24 * 60 * 60 * 1000;
 // since the composite is a mean of percentile ranks and rarely clears 75.)
 const REDUCED_TOP = 20;
 
-// ~100 largest US names, size-ordered — the default universe (a meaningful
-// "top-ranked" scan that fits a free data tier). The full S&P 500 is opt-in via
-// SCANNER_FULL_UNIVERSE=1 (needs the quota + patience to fetch 500 symbols).
+// ~100 largest US names, size-ordered — the curated fallback universe, used
+// when SCANNER_FULL_UNIVERSE=0 or the Wikipedia scrape fails.
 const LARGE_CAP_UNIVERSE = [
   "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AVGO", "BRK-B", "JPM",
   "LLY", "V", "UNH", "XOM", "JNJ", "WMT", "MA", "PG", "HD", "COST",
@@ -49,12 +55,12 @@ function ensureCacheDir() {
 }
 
 /**
- * The scan universe. Default: the curated large-cap list (size-ordered, fits a
- * free data tier). SCANNER_FULL_UNIVERSE=1 scrapes the full S&P 500 from
- * Wikipedia (cached 24h), falling back to the large-cap list on failure.
+ * The scan universe. Default: the full S&P 500, scraped from Wikipedia (cached
+ * 24h), falling back to the curated large-cap list on failure.
+ * SCANNER_FULL_UNIVERSE=0 forces the curated list.
  */
 export async function getUniverse() {
-  if (process.env.SCANNER_FULL_UNIVERSE !== "1") return LARGE_CAP_UNIVERSE;
+  if (!FULL_UNIVERSE) return LARGE_CAP_UNIVERSE;
   ensureCacheDir();
   try {
     const cached = JSON.parse(fs.readFileSync(UNIVERSE_CACHE, "utf8"));
@@ -182,6 +188,13 @@ export async function runScanner({ macroMode = "OFFENSIVE", top = 100 } = {}) {
   }
 
   let rows = buildComposite(tickers, factorMaps);
+  // Sector-relative ranking (Phase 4.2): tag each row with its GICS sector and
+  // its rank *within* that sector, so a chip name isn't only judged against a
+  // utility. Sector comes from the static map (null for unmapped names).
+  for (const r of rows) r.sector = sectorOf(r.ticker);
+  const sRanks = sectorRanks(rows);
+  for (const r of rows) r.sectorRank = sRanks[r.ticker] ?? null;
+
   const limit = macroMode === "REDUCED" ? Math.min(top, REDUCED_TOP) : top;
   rows = rows.slice(0, limit);
 
@@ -222,5 +235,8 @@ function fixtureScanner(macroMode) {
   }));
   if (macroMode === "REDUCED") rows = rows.slice(0, REDUCED_TOP);
   rows.forEach((r, i) => (r.rank = i + 1));
+  for (const r of rows) r.sector = sectorOf(r.ticker);
+  const sRanks = sectorRanks(rows);
+  for (const r of rows) r.sectorRank = sRanks[r.ticker] ?? null;
   return rows;
 }

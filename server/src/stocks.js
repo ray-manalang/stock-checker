@@ -397,6 +397,17 @@ export function parseSpark(json) {
  * { symbol: { closes, volumes?, timestamp } }; failed symbols are simply absent.
  */
 export async function fetchSeriesMulti(symbols, range = "1y") {
+  // Fixtures serve end-to-end so demo/offline mode has believable series for
+  // every caller (scanner/macro have their own fixture paths; holdings uses this).
+  if (process.env.STOCK_FIXTURES === "1") {
+    const { fixtureChart } = await import("./fixtures.js");
+    const out = {};
+    for (const s of symbols) {
+      const { series } = fixtureChart(s, range);
+      out[s] = { closes: series.close, volumes: series.volume, timestamps: series.timestamp };
+    }
+    return out;
+  }
   // Yahoo via the sidecar batches hundreds of symbols in one fast call.
   if (yfEnabled()) {
     try {
@@ -497,6 +508,15 @@ const _quoteCache = new Map(); // symbol -> { at, price, changePct }
 const QUOTE_TTL_MS = 60_000;
 
 export async function liveQuotes(symbols) {
+  if (process.env.STOCK_FIXTURES === "1") {
+    const { fixtureChart } = await import("./fixtures.js");
+    const out = {};
+    for (const s of symbols) {
+      const { quote } = fixtureChart(s);
+      out[s] = { price: quote.price, changePct: quote.changePct };
+    }
+    return out;
+  }
   const now = Date.now();
   const out = {};
   const need = [];
@@ -553,6 +573,9 @@ async function fetchFundamentalsUncached(symbol) {
           quarterEnd: r.quarterEnd ?? null,
           // Feeds the opt-in scanner short-interest factor; often null.
           shortRatio: r.shortRatio ?? null,
+          sector: r.sector ?? null,
+          // Dividend awareness (Phase 4.3) — yield as a fraction (0.012 = 1.2%).
+          dividendYield: r.dividendYield ?? null,
           financials: r.financials,
         };
       }

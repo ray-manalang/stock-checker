@@ -123,6 +123,164 @@ export async function createAlert(
     )
   ).data;
 }
+export async function updateAlert(
+  id: number,
+  targetLow: number | null,
+  targetHigh: number | null = null,
+): Promise<Alert[]> {
+  return (
+    await jsonOrThrow(
+      await fetch(`/api/alerts/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetLow, targetHigh }),
+      }),
+    )
+  ).data;
+}
+export async function deleteAlert(id: number): Promise<Alert[]> {
+  return (await jsonOrThrow(await fetch(`/api/alerts/${id}`, { method: "DELETE" }))).data;
+}
+
+// ---------- settings (risk tolerance) ----------
+export type RiskTolerance = "conservative" | "balanced" | "aggressive";
+export type Settings = {
+  riskTolerance: RiskTolerance;
+  riskProfiles: Record<string, { label: string }>;
+};
+export async function getSettings(): Promise<Settings> {
+  return jsonOrThrow(await fetch("/api/settings"));
+}
+export async function updateSettings(
+  patch: Partial<Pick<Settings, "riskTolerance">>,
+): Promise<{ riskTolerance: RiskTolerance }> {
+  return jsonOrThrow(
+    await fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }),
+  );
+}
+
+// ---------- watchlist buy-signals ----------
+export type WatchSignal = {
+  ticker: string;
+  lastVerdict: string | null;
+  lastLabel: string | null;
+  lastCheckedAt: string | null;
+  notifiedAt: string | null;
+};
+export async function getWatchSignals(): Promise<WatchSignal[]> {
+  return (await jsonOrThrow(await fetch("/api/watchlist/signals"))).data;
+}
+
+// ---------- holdings ----------
+export type HoldingNote = { kind: string; title?: string; text: string };
+export type HoldingSource = { source: string; shares: number; costBasis: number | null };
+export type Holding = {
+  ticker: string;
+  name: string | null;
+  shares: number;
+  costBasis: number | null;
+  sources: HoldingSource[];
+  price: number | null;
+  changePct: number | null;
+  marketValue: number | null;
+  costValue: number | null;
+  gainLoss: number | null;
+  gainLossPct: number | null;
+  concentrationPct: number | null;
+  taxAdvantaged: boolean;
+  signal: string | null;
+  notes: HoldingNote[];
+};
+export type Portfolio = {
+  positions: Holding[];
+  totalValue: number;
+  totalCost: number;
+  unrealized: number | null;
+  unrealizedPct: number | null;
+  count: number;
+  sources: string[];
+  asOf: string | null;
+};
+export type HoldingsResponse = {
+  data: Portfolio;
+  demo: boolean;
+  macro: { zone: string; sizingPct: number | null } | null;
+};
+export async function getHoldings(): Promise<HoldingsResponse> {
+  return jsonOrThrow(await fetch("/api/holdings"));
+}
+
+export type CsvMapping = {
+  ticker: string | null;
+  shares: string | null;
+  costBasis: string | null;
+  costBasisMode: "pershare" | "total";
+  source: string | null;
+};
+export type HoldingsPreview = {
+  headers: string[];
+  sample: Record<string, string>[];
+  rowCount: number;
+  suggestedMapping: CsvMapping;
+};
+export async function previewHoldings(csv: string): Promise<HoldingsPreview> {
+  return (
+    await jsonOrThrow(
+      await fetch("/api/holdings/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csv }),
+      }),
+    )
+  ).data;
+}
+export type ImportSummary = {
+  imported: number;
+  positions: number;
+  skipped: number;
+  skippedSymbols: string[];
+  asOf: string;
+};
+export async function importHoldings(
+  csv: string,
+  mapping: CsvMapping,
+  asOf?: string,
+): Promise<ImportSummary> {
+  return jsonOrThrow(
+    await fetch("/api/holdings/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csv, mapping, asOf }),
+    }),
+  );
+}
+export async function setHoldingTax(ticker: string, taxAdvantaged: boolean): Promise<void> {
+  await jsonOrThrow(
+    await fetch(`/api/holdings/${encodeURIComponent(ticker)}/tax`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taxAdvantaged }),
+    }),
+  );
+}
+
+// ---------- backtest report ----------
+export type Backtest = {
+  windowDays: number;
+  logged: number;
+  since: string | null;
+  graded: number;
+  ready: boolean;
+  overall: number | null;
+  buckets: Record<string, { total: number; correct: number; hitRate: number | null }>;
+};
+export async function getBacktest(): Promise<Backtest> {
+  return (await jsonOrThrow(await fetch("/api/backtest"))).data;
+}
 
 export async function checkTicker(
   ticker: string,

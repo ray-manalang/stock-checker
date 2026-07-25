@@ -44,11 +44,16 @@ function rankDesc(values) {
 /**
  * @param rows array of { ticker, quant, fundamental } where `quant` is the
  *   scanner composite (0–100) and `fundamental` is the 1–10 score (or null).
+ * @param opts.quantWeight overrides the default 0.6 quant weight (the
+ *   risk-tolerance control in Phase 4.1 shifts this); fundamental weight is the
+ *   complement.
  * @returns rows augmented with quantRank, blendedScore, blendedRank, rankDelta,
  *   rankFlag ("upgrade" | "downgrade" | ""), sorted by blendedRank ascending.
  */
-export function blend(rows) {
+export function blend(rows, { quantWeight = QUANT_WEIGHT } = {}) {
   if (!rows.length) return [];
+  const qw = Math.max(0, Math.min(1, quantWeight));
+  const fw = 1 - qw;
 
   const quantVals = rows.map((r) => (typeof r.quant === "number" ? r.quant : 0));
   const fundMedian = median(rows.map((r) => r.fundamental));
@@ -61,7 +66,7 @@ export function blend(rows) {
   const fundNorm = minMaxNorm(fundVals);
 
   const blended = rows.map((_, i) =>
-    Number((QUANT_WEIGHT * quantNorm[i] + FUNDAMENTAL_WEIGHT * fundNorm[i]).toFixed(4)),
+    Number((qw * quantNorm[i] + fw * fundNorm[i]).toFixed(4)),
   );
   const blendedRank = rankDesc(blended);
 

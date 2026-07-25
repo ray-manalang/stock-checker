@@ -89,13 +89,15 @@ function buildWhy(key, { trend, price, timing, quality }) {
 
 /**
  * Suggested buy zone as a deterministic fallback: a band a little below the
- * current price, anchored toward the lower half of the 52-week range.
+ * current price, anchored toward the lower half of the 52-week range. `scale`
+ * (the risk-tolerance buy-zone width, default 1) widens or tightens the band —
+ * >1 waits for a deeper pullback, <1 buys closer to the current price.
  */
-export function suggestBuyZone(price, low52, high52) {
+export function suggestBuyZone(price, low52, high52, scale = 1) {
   if (typeof price !== "number") return null;
-  // Target the 5–12% pullback band, but never below the 52-week low.
-  let low = price * 0.88;
-  let high = price * 0.95;
+  // Target the 5–12% pullback band (scaled), but never below the 52-week low.
+  let low = price * (1 - 0.12 * scale);
+  let high = price * (1 - 0.05 * scale);
   if (typeof low52 === "number") low = Math.max(low, low52);
   if (typeof high52 === "number") high = Math.min(high, high52);
   if (low > high) [low, high] = [high, low];

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { InfoTip } from "./components/InfoTip";
 import { CnbcVideos } from "./CnbcVideos";
 import { useLivePrices } from "./livePrices";
-import { refreshLayer } from "./api";
+import { refreshLayer, type RiskTolerance } from "./api";
+import { RiskControl } from "./components/RiskControl";
 import { GLOSSARY } from "./lib/glossary";
 import { money, num, absChange, type ChangeMode } from "./lib/format";
 
@@ -45,6 +46,8 @@ type ScannerRow = {
   rankDelta?: number;
   rankFlag?: string;
   blendedScore?: number;
+  sector?: string | null;
+  sectorRank?: number | null;
   price?: number | null;
   changePct?: number | null;
   analyst?: AnalystDetail | null;
@@ -128,9 +131,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export function ProView({
   changeMode,
   onToggleChangeMode,
+  risk,
+  onRiskChange,
 }: {
   changeMode: ChangeMode;
   onToggleChangeMode: () => void;
+  risk: RiskTolerance;
+  onRiskChange: (r: RiskTolerance) => void;
 }) {
   const [macro, setMacro] = useState<Envelope<Macro> | null>(null);
   const [scanner, setScanner] = useState<ScannerEnv | null>(null);
@@ -334,10 +341,11 @@ export function ProView({
             <span className="chev">{collapsed ? "▸" : "▾"}</span>
             <span>
               <h3>Top-ranked stocks</h3>
-              <div className="subtitle">Quant scanner across the largest US names.</div>
+              <div className="subtitle">Quant scanner across the S&amp;P 500.</div>
             </span>
           </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <RiskControl value={risk} onChange={onRiskChange} />
             {rows.length > 0 && (
               <span className="subtitle">ranked {agoLabel(scanner?.asOf)}</span>
             )}
@@ -450,7 +458,16 @@ export function ProView({
                           </span>
                         )}
                       </span>
-                      {r.name && <span className="s-sub">{r.name}</span>}
+                      {(r.name || r.sectorRank != null) && (
+                        <span className="s-sub">
+                          {r.name}
+                          {r.sectorRank != null && r.sector && (
+                            <span title={`Rank within ${r.sector}`}>
+                              {r.name ? " · " : ""}#{r.sectorRank} in {r.sector}
+                            </span>
+                          )}
+                        </span>
+                      )}
                     </span>
                     <span className="s-meta">
                       <span className="s-px">{money(price, "USD")}</span>

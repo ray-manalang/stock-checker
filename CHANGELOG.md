@@ -10,6 +10,57 @@ project is not versioned; commits are the unit of record.
 
 ---
 
+## 2026-07-25 — Enhancement roadmap (Phases 1–5)
+
+Implemented the full [ROADMAP.md](ROADMAP.md) backlog: personalization (holdings),
+proactive notifications, trust (backtesting), and deeper analysis.
+
+### Added
+
+- **Holdings (Phase 3).** New `Holdings` view with multi-brokerage CSV import
+  (`POST /api/holdings/preview` + `/import`, remembered column mapping), snapshot
+  semantics (re-import replaces wholesale), same-ticker roll-up across sources with a
+  share-weighted blended cost basis, and non-tradable rows (cash/bonds/CUSIPs) skipped.
+  Portfolio view (`GET /api/holdings`) surfaces concentration %, unrealized gain/loss,
+  add-on-dip framing on held BUYs, and Tier-1 tax-loss notes with a per-position
+  tax-advantaged toggle (`POST /api/holdings/:ticker/tax`). New `holdings` +
+  `holdings_flags` tables.
+- **Watching to buy (Phase 2.2).** Daily ET-pinned `checkWatchlistSignals` job runs the
+  Check pipeline over the watchlist and notifies only on the *transition into* "Good time
+  to buy", macro-gated on `newLongs`. New `watchlist_verdict_state` table;
+  `GET /api/watchlist/signals` + manual `POST /api/watchlist/signals/check`.
+- **Home Assistant push (Phase 2.1).** `notify.js` calls HA's `notify.mobile_app_*` via a
+  long-lived token (deep-links into the ticker via `APP_BASE_URL`); `GET /api/ha/summary`
+  for a passive HA dashboard tile. No-op without `HA_BASE_URL`/`HA_TOKEN`.
+- **Fixtures end-to-end.** `STOCK_FIXTURES` now serves `fetchSeriesMulti`/`liveQuotes` too
+  (previously only the scanner/macro fixture paths), so offline/demo data is believable
+  across every surface — including Holdings. (Phase 3.4's demo-mode toggle and the "Hide $"
+  blur were built and then cut before shipping; only this fixtures fix remains.)
+- **Alert management UI (Phase 1.3).** List/edit/delete surface for the previously
+  create-only alerts; `PUT /api/alerts/:id`.
+- **Verdict logging + backtest (Phase 1.2 + 4.4).** Every check appends to a new
+  `verdict_log`; `GET /api/backtest` grades verdicts ≥90 days old on direction (Hold graded
+  loosely) and reports a hit rate. Track-record card in the UI.
+- **Risk tolerance (Phase 4.1).** Conservative/Balanced/Aggressive control shifts the
+  blender's quant/fundamental weight and the buy-zone width; persisted in `settings`.
+  `GET`/`PUT /api/settings`.
+- **Sector-relative ranking (Phase 4.2).** Scanner tags each name with its GICS sector and
+  within-sector rank (static map + sidecar `sector`); shown in Top-ranked rows.
+- **Dividend awareness (Phase 4.3).** Sidecar surfaces `dividendYield`; shown in a stock's
+  details.
+- **PWA (Phase 5.1).** Manifest, generated PNG icons, and a network-first service worker —
+  installable to the homescreen. `GET /api/backtest`, offline shell (API always hits network).
+- **Compare view (Phase 5.2).** Two or three tickers side by side.
+
+### Changed
+
+- **Dropped the Basic/Pro toggle (Phase 1.1).** The former Pro layout is the only screen;
+  the check tool renders inline. Navigation is now Home / Holdings / Compare.
+- **Scanner defaults to the full S&P 500 (Phase 1.3).** `SCANNER_FULL_UNIVERSE` is on by
+  default (set `=0` for the curated large-cap list); universe cap defaults to 550.
+
+---
+
 ## 2026-07-25
 
 Documentation baseline, then a pass fixing what the audit turned up.

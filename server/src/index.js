@@ -15,6 +15,7 @@ import {
   listAlerts,
   addAlert,
   removeAlert,
+  updateAlert,
   usageThisMonth,
   getCachedSeries,
   setCachedSeries,
@@ -22,6 +23,12 @@ import {
   recordCheck,
   recentChecks,
   getAnalystDetail,
+  logVerdict,
+  getSetting,
+  setSetting,
+  listHoldingsRaw,
+  setHoldingFlag,
+  verdictLogStats,
 } from "./db.js";
 import { fetchSeriesMulti, liveQuotes } from "./stocks.js";
 import {
@@ -33,6 +40,17 @@ import {
 import { blend } from "./analyst/blender.js";
 import { NAMES } from "./scanner/names.js";
 import { checkAlerts } from "./alerts.js";
+import { RISK_PROFILES, DEFAULT_RISK, normalizeRisk } from "./risk.js";
+import {
+  rollupHoldings,
+  previewHoldingsCsv,
+  importHoldingsCsv,
+  heldTickers,
+} from "./holdings.js";
+import { haSummary } from "./notify.js";
+import { buildBacktestReport } from "./backtest.js";
+import { checkWatchlistSignals } from "./watchlistSignals.js";
+import { listWatchlistVerdictState } from "./db.js";
 
 function normSym(s) {
   return String(s ?? "").trim().toUpperCase().replace(/\./g, "-");
@@ -119,6 +137,15 @@ async function runCheck(ticker, res, opts) {
       price: result.quote.price,
       llm: result.llm,
     });
+    // Append-only history for Phase 4 backtesting (separate from recent_checks).
+    logVerdict({
+      ticker: result.quote.ticker,
+      verdict: result.verdict.signal,
+      label: result.verdict.label,
+      confidence: result.confidence,
+      price: result.quote.price,
+      source: result.llm ? "claude" : "deterministic",
+    });
     res.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Analysis failed";
@@ -136,7 +163,8 @@ app.get("/api/checks", (_req, res) => res.json({ data: recentChecks() }));
 app.get("/api/check/:sym", (req, res) => {
   const deep = req.query.deep !== "0" && req.query.deep !== "false";
   const fresh = req.query.fresh === "1" || req.query.fresh === "true";
-  return runCheck(req.params.sym, res, { deep, fresh });
+  const risk = RISK_PROFILES[normalizeRisk(getSetting("riskTolerance", DEFAULT_RISK))];
+  return runCheck(req.params.sym, res, { deep, fresh, buyZoneScale: risk.buyZoneScale });
 });
 
 // Back-compat: original POST endpoint.
@@ -172,10 +200,12 @@ app.get("/api/scanner", async (_req, res) => {
   let rows = run.rows;
   let blended = false;
   let summary = null;
+  const risk = RISK_PROFILES[normalizeRisk(getSetting("riskTolerance", DEFAULT_RISK))];
   const funds = latestFundamentalScores(run.rows.map((r) => r.ticker));
   if (Object.keys(funds).length) {
     const merged = blend(
       run.rows.map((r) => ({ ...r, quant: r.composite, fundamental: funds[r.ticker] ?? null })),
+      { quantWeight: risk.quantWeight },
     );
     const detail = getAnalystDetail(merged.map((r) => r.ticker));
     rows = merged.map((r) => ({
@@ -187,6 +217,8 @@ app.get("/api/scanner", async (_req, res) => {
       rankDelta: r.rankDelta,
       rankFlag: r.rankFlag,
       fundamental: r.fundamental,
+      sector: r.sector ?? null,
+      sectorRank: r.sectorRank ?? null,
       factors: r.factors,
       analyst: detail[r.ticker] ?? null,
     }));
@@ -387,9 +419,151 @@ app.post("/api/alerts", (req, res) => {
   res.json({ ok: true, alert, data: listAlerts() });
 });
 
+// Edit an existing alert's target(s) and re-arm it (alert management UI).
+app.put("/api/alerts/:id", (req, res) => {
+  const targetLow = numOrNull(req.body?.targetLow);
+  const targetHigh = numOrNull(req.body?.targetHigh);
+  if (targetLow == null && targetHigh == null) {
+    return res.status(400).json({ error: "a target price is required" });
+  }
+  updateAlert(Number(req.params.id), { targetLow, targetHigh });
+  res.json({ ok: true, data: listAlerts() });
+});
+
 app.delete("/api/alerts/:id", (req, res) => {
   removeAlert(Number(req.params.id));
   res.json({ ok: true, data: listAlerts() });
+});
+
+// ---------- settings (risk tolerance) ----------
+app.get("/api/settings", (_req, res) => {
+  res.json({
+    riskTolerance: normalizeRisk(getSetting("riskTolerance", DEFAULT_RISK)),
+    riskProfiles: Object.fromEntries(
+      Object.entries(RISK_PROFILES).map(([k, v]) => [k, { label: v.label }]),
+    ),
+  });
+});
+
+app.put("/api/settings", (req, res) => {
+  if (req.body?.riskTolerance != null) {
+    setSetting("riskTolerance", normalizeRisk(req.body.riskTolerance));
+  }
+  res.json({
+    ok: true,
+    riskTolerance: normalizeRisk(getSetting("riskTolerance", DEFAULT_RISK)),
+  });
+});
+
+// ---------- watchlist buy-signals (Phase 2.2) ----------
+// Per-ticker last verdict + notification state for the "Watching to buy" panel.
+app.get("/api/watchlist/signals", (_req, res) =>
+  res.json({ data: listWatchlistVerdictState() }),
+);
+
+// Run the daily watchlist scan now (instead of waiting for the cron).
+app.post("/api/watchlist/signals/check", async (_req, res) => {
+  try {
+    res.json({ ok: true, ...(await checkWatchlistSignals()) });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "check failed" });
+  }
+});
+
+// ---------- holdings (Phase 3) ----------
+// Gather a price map (live + cached closes) for a set of tickers, reusing the
+// shared 1y cache and the 60s live-quote cache. closes feed the local verdict.
+async function holdingsPriceMap(tickers) {
+  if (!tickers.length) return {};
+  const { fresh, stale } = freshSeriesMap(tickers, 6 * 60 * 60 * 1000);
+  const seriesMap = { ...fresh };
+  if (stale.length) {
+    try {
+      const fetched = await fetchSeriesMulti(stale, "1y");
+      for (const [t, series] of Object.entries(fetched)) {
+        setCachedSeries(t, series);
+        seriesMap[t] = series;
+      }
+    } catch {
+      /* best-effort */
+    }
+  }
+  const live = await liveQuotes(tickers).catch(() => ({}));
+  const out = {};
+  for (const t of tickers) {
+    const s = seriesMap[t] ?? getCachedSeries(t);
+    const closes = s?.closes ?? null;
+    const { price: cachePrice, changePct: cacheChg } = priceChangeOf(
+      s?.closes ? { closes: s.closes } : {},
+    );
+    const l = live[t];
+    out[t] = {
+      price: l?.price ?? cachePrice ?? null,
+      changePct: l?.changePct ?? cacheChg ?? null,
+      closes,
+    };
+  }
+  return out;
+}
+
+app.get("/api/holdings", async (_req, res) => {
+  try {
+    const tickers = heldTickers();
+    const priceMap = await holdingsPriceMap(tickers);
+    const portfolio = rollupHoldings(priceMap);
+    const macro = latestMacro();
+    res.json({
+      data: portfolio,
+      macro: macro
+        ? { zone: macro.zone, sizingPct: macro.meta?.sizingPct ?? null }
+        : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "holdings failed" });
+  }
+});
+
+// Preview an uploaded CSV → detected headers, sample rows, suggested mapping.
+app.post("/api/holdings/preview", (req, res) => {
+  try {
+    res.json({ data: previewHoldingsCsv(String(req.body?.csv ?? "")) });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "preview failed" });
+  }
+});
+
+// Import positions (snapshot; replaces holdings wholesale) using a column mapping.
+app.post("/api/holdings/import", (req, res) => {
+  try {
+    const summary = importHoldingsCsv(
+      String(req.body?.csv ?? ""),
+      req.body?.mapping ?? {},
+      req.body?.asOf ?? null,
+    );
+    res.json({ ok: true, ...summary });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "import failed" });
+  }
+});
+
+// Toggle a position's tax-advantaged flag (survives re-import) — Phase 3.3.
+app.post("/api/holdings/:ticker/tax", (req, res) => {
+  setHoldingFlag(normSym(req.params.ticker), !!req.body?.taxAdvantaged);
+  res.json({ ok: true });
+});
+
+// ---------- Home Assistant (Phase 2.1) ----------
+// Compact state HA can poll for a passive dashboard tile.
+app.get("/api/ha/summary", (_req, res) => res.json(haSummary()));
+
+// ---------- backtest report (Phase 4.4) ----------
+app.get("/api/backtest", async (req, res) => {
+  try {
+    const windowDays = Number(req.query.window) || 90;
+    res.json({ data: await buildBacktestReport({ windowDays }) });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "backtest failed" });
+  }
 });
 
 // Run the alert check now (instead of waiting for the 10-min cron) — useful for

@@ -144,6 +144,30 @@ export function buildComposite(tickers, factorMaps) {
   return rows;
 }
 
+/**
+ * Within-sector rank (1 = best in its sector) from ranked rows that carry a
+ * `sector` and a `composite`. Rows without a sector are left out of the result.
+ * Pure — returns { ticker: sectorRank }.
+ */
+export function sectorRanks(rows) {
+  const bySector = new Map();
+  for (const r of rows) {
+    if (!r.sector) continue;
+    if (!bySector.has(r.sector)) bySector.set(r.sector, []);
+    bySector.get(r.sector).push(r);
+  }
+  const out = {};
+  for (const group of bySector.values()) {
+    group
+      .slice()
+      .sort((a, b) => (b.composite ?? -1) - (a.composite ?? -1))
+      .forEach((r, i) => {
+        out[r.ticker] = i + 1;
+      });
+  }
+  return out;
+}
+
 // ---------- helpers ----------
 function mean(a) {
   return a.reduce((s, v) => s + v, 0) / a.length;
