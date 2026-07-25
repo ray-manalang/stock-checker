@@ -1248,9 +1248,6 @@ body:has(.tape) .page {
 }
 .import-panel textarea { min-height: 90px; resize: vertical; width: 100%; }
 
-/* Compare view columns. */
-.compare-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-
 /* Backtest bars. */
 .bt-buckets { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 8px; }
 .bt-bucket { flex: 1; min-width: 120px; }

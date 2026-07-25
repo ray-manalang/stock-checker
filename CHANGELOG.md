@@ -50,14 +50,27 @@ proactive notifications, trust (backtesting), and deeper analysis.
   details.
 - **PWA (Phase 5.1).** Manifest, generated PNG icons, and a network-first service worker —
   installable to the homescreen. `GET /api/backtest`, offline shell (API always hits network).
-- **Compare view (Phase 5.2).** Two or three tickers side by side.
+- **Compare view (Phase 5.2).** Two or three tickers side by side. _(Later removed — see
+  the follow-up note below.)_
 
 ### Changed
 
-- **Dropped the Basic/Pro toggle (Phase 1.1).** The former Pro layout is the only screen;
-  the check tool renders inline. Navigation is now Home / Holdings / Compare.
+- **Dropped the Basic/Pro toggle (Phase 1.1).** The former Pro layout is the only screen.
 - **Scanner defaults to the full S&P 500 (Phase 1.3).** `SCANNER_FULL_UNIVERSE` is on by
   default (set `=0` for the curated large-cap list); universe cap defaults to 550.
+
+### Follow-ups (same day)
+
+- **Navigation reworked** to Home / Research / Holdings. Home is a dashboard (holdings,
+  alerts, track-record teasers + macro/scanner/CNBC); the ticker check tool moved to its own
+  **Research** page. Personal cards lead the dashboard instead of sitting below the market
+  cards. Restored a text-only **Hide $** privacy toggle. Removed the Compare view.
+- **Holdings:** added filtering (search + All/Gainers/Losers/Tax-loss); serve last-close
+  prices from the shared cache instead of spawning the live-quote sidecar per load (was slow).
+- **Fixed a sidecar bug that surfaced as "Market data unavailable (429)".** `yf_fetch.py`
+  emitted `NaN` for tickers whose latest bar was a partial/NaN close (e.g. WDAY, SPCX); `NaN`
+  is invalid JSON, so Node's parse threw and the check fell through to the plain-Node Yahoo
+  path that Yahoo always 429s. The sidecar now drops NaN closes and sanitizes all output.
 
 ---
 

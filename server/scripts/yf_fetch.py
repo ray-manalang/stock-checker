@@ -15,12 +15,27 @@ Ranges: 1y | 5y | 5d (mapped to yfinance periods). All output is JSON on stdout;
 errors go to stderr with a non-zero exit.
 """
 import json
+import math
 import sys
 
 
 def to_unix(index):
     # pandas DatetimeIndex -> list of unix seconds
     return [int(ts.timestamp()) for ts in index.to_pydatetime()]
+
+
+def sanitize(obj):
+    """Replace NaN/Infinity floats with None throughout. Python's json emits
+    `NaN`/`Infinity` literals by default, which are NOT valid JSON — Node's
+    JSON.parse throws on them, making the sidecar look like it failed (and the
+    caller then falls back to the rate-limited plain-Node Yahoo path)."""
+    if isinstance(obj, float):
+        return None if (math.isnan(obj) or math.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {k: sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [sanitize(v) for v in obj]
+    return obj
 
 
 def cmd_chart(symbol, period):
@@ -30,6 +45,12 @@ def cmd_chart(symbol, period):
     h = t.history(period=period, interval="1d", auto_adjust=True)
     if h is None or h.empty:
         raise SystemExit(f"no data for {symbol}")
+
+    # Drop rows with a NaN close (a partial current-day bar, or data gaps) so the
+    # arrays stay aligned and `price` is a real number rather than NaN.
+    h = h[h["Close"].notna()]
+    if h.empty:
+        raise SystemExit(f"no valid closes for {symbol}")
 
     closes = [float(x) for x in h["Close"].tolist()]
     series = {
@@ -277,7 +298,7 @@ def main():
         result = cmd_fundamentals(sys.argv[2])
     else:
         raise SystemExit(f"unknown mode {mode}")
-    json.dump(result, sys.stdout)
+    json.dump(sanitize(result), sys.stdout)
 
 
 if __name__ == "__main__":

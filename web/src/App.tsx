@@ -25,7 +25,6 @@ import { WatchingToBuy } from "./WatchingToBuy";
 import { AlertsPanel } from "./AlertsPanel";
 import { BacktestCard } from "./BacktestCard";
 import { HoldingsPage } from "./HoldingsPage";
-import { CompareView } from "./CompareView";
 import { GLOSSARY } from "./lib/glossary";
 import { money, num, pct, pointStr, type ChangeMode } from "./lib/format";
 
@@ -33,7 +32,7 @@ function toneClass(t: Tone): string {
   return t;
 }
 
-type View = "main" | "holdings" | "compare";
+type View = "main" | "research" | "holdings";
 
 export default function App() {
   const [view, setView] = useState<View>("main");
@@ -81,6 +80,7 @@ export default function App() {
   useEffect(() => {
     const sym = new URLSearchParams(window.location.search).get("check");
     if (sym) {
+      setView("research");
       setTicker(sym.toUpperCase());
       run(sym);
       // Clear the param so a refresh doesn't re-trigger.
@@ -188,16 +188,16 @@ export default function App() {
             Home
           </button>
           <button
+            className={`nav-link${view === "research" ? " active" : ""}`}
+            onClick={() => setView("research")}
+          >
+            Research
+          </button>
+          <button
             className={`nav-link${view === "holdings" ? " active" : ""}`}
             onClick={() => setView("holdings")}
           >
             Holdings
-          </button>
-          <button
-            className={`nav-link${view === "compare" ? " active" : ""}`}
-            onClick={() => setView("compare")}
-          >
-            Compare
           </button>
           <button
             className="nav-link"
@@ -210,10 +210,9 @@ export default function App() {
       </nav>
 
       {view === "holdings" && <HoldingsPage onBack={() => setView("main")} />}
-      {view === "compare" && <CompareView onBack={() => setView("main")} />}
 
-      <div className="pro-dashboard" style={{ display: view === "main" ? undefined : "none" }}>
-      <div className="check-col">
+      {/* Research — the ticker check tool (search, recents, watchlist, answer) */}
+      <div className="check-col" style={{ display: view === "research" ? undefined : "none" }}>
       <div className="check-tool">
       <form className="search" onSubmit={onSubmit}>
         <label htmlFor="ticker" className="sr-only">
@@ -358,22 +357,6 @@ export default function App() {
         />
       )}
 
-      <HoldingsTeaser onOpen={() => setView("holdings")} />
-
-      <WatchingToBuy onOpen={(t) => run(t)} />
-
-      <AlertsPanel />
-
-      <BacktestCard />
-      </div>{/* check-col */}
-
-      <ProView
-        changeMode={changeMode}
-        onToggleChangeMode={toggleChangeMode}
-        risk={risk}
-        onRiskChange={changeRisk}
-      />
-
       {usage?.llm && (
         <div
           className="center muted"
@@ -383,7 +366,30 @@ export default function App() {
           {usage.calls === 1 ? "call" : "calls"}
         </div>
       )}
-      </div>{/* pro-dashboard */}
+      </div>{/* check-col (research) */}
+
+      {/* Home dashboard */}
+      <div className="pro-dashboard" style={{ display: view === "main" ? undefined : "none" }}>
+      <HoldingsTeaser onOpen={() => setView("holdings")} />
+
+      <WatchingToBuy
+        onOpen={(t) => {
+          setView("research");
+          run(t);
+        }}
+      />
+
+      <AlertsPanel />
+
+      <BacktestCard />
+
+      <ProView
+        changeMode={changeMode}
+        onToggleChangeMode={toggleChangeMode}
+        risk={risk}
+        onRiskChange={changeRisk}
+      />
+      </div>{/* pro-dashboard (home) */}
     </div>
     <TickerTape
       watchlist={watchlist}

@@ -489,10 +489,11 @@ known price.
 **Timers running concurrently**: live prices 60 s · tape reload 60 s · macro+scanner poll
 30 s · CNBC 5 min.
 
-**Views** (`App.tsx`): the former Basic/Pro toggle is gone — the ex-Pro layout (macro,
-scanner, CNBC) is the only screen, with the check tool inline below it. Nav switches between
-`main`, `holdings` (`HoldingsPage.tsx`), and `compare` (`CompareView.tsx`). A `?check=SYM`
-query param deep-links a ticker (used by HA notifications).
+**Views** (`App.tsx`): the former Basic/Pro toggle is gone. Nav switches between `main` (the
+Home dashboard — holdings/alerts/track-record teasers, macro, scanner, CNBC), `research` (the
+ticker check tool — search, recents, watchlist, answer card), and `holdings`
+(`HoldingsPage.tsx`). A `?check=SYM` query param opens the Research view on that ticker (used
+by HA notifications).
 
 **Client-side persistence** is three localStorage keys only: `changeMode` (`pct`/`abs`),
 `macroCollapsed`, `scannerCollapsed`. Risk tolerance is **server-side** (`settings` table)
