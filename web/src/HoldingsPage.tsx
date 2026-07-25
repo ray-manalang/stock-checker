@@ -232,10 +232,28 @@ function SectorBreakdown({
   active: string;
   onSelect: (sector: string) => void;
 }) {
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem("sectorAllocCollapsed") === "1",
+  );
+  const toggle = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      localStorage.setItem("sectorAllocCollapsed", next ? "1" : "0");
+      return next;
+    });
   return (
     <div className="sector-alloc">
-      <div className="sector-alloc-head">Allocation by sector</div>
-      {bySector.map((s) => (
+      <button
+        className="sector-alloc-head"
+        onClick={toggle}
+        aria-expanded={!collapsed}
+        title={collapsed ? "Expand" : "Collapse"}
+      >
+        <span className="chev">{collapsed ? "▸" : "▾"}</span>
+        Allocation by sector
+      </button>
+      {!collapsed &&
+        bySector.map((s) => (
         <button
           key={s.sector}
           className={`sector-row${active === s.sector ? " active" : ""}`}
