@@ -77,7 +77,10 @@ export function AlertsPanel() {
       <div className="insight-head">
         <h3>Your alerts</h3>
       </div>
-      <div className="insight-foot" style={{ marginTop: 4, marginBottom: 6 }}>
+      <div
+        className="insight-foot"
+        style={{ marginTop: 4, marginBottom: 6, textAlign: "left", paddingLeft: 18, paddingRight: 18 }}
+      >
         Price-threshold alerts — deprioritized in favor of Watching to buy, but still here.
       </div>
       <div className="insight-divider" />
@@ -181,7 +184,7 @@ export function AlertsPanel() {
       ) : (
         <button
           className="linklike"
-          style={{ marginTop: 14, color: "var(--accent)", fontSize: 13 }}
+          style={{ margin: "14px 18px", color: "var(--accent)", fontSize: 13 }}
           onClick={() => setAdding(true)}
         >
           + Set a new alert

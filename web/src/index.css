@@ -1247,7 +1247,7 @@ body:has(.tape) .page {
 .tax-toggle input { accent-color: var(--accent); }
 
 /* Alert management rows. */
-.alert-row { padding: 13px 0; border-top: 1px solid var(--hairline-soft); }
+.alert-row { padding: 13px 18px; border-top: 1px solid var(--hairline-soft); }
 .alert-row:first-of-type { border-top: none; padding-top: 4px; }
 .alert-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .alert-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
