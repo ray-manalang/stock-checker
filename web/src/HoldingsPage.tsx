@@ -14,6 +14,13 @@ import {
 import { money } from "./lib/format";
 import { ClearableInput } from "./components/ClearableInput";
 
+// Same zone → pill-tone mapping the Market conditions card uses (ProView).
+const ZONE_TONE: Record<string, string> = {
+  "FULL DEPLOY": "up",
+  REDUCED: "warn",
+  DEFENSIVE: "down",
+};
+
 function signedMoney(v: number | null): string {
   if (v == null) return "—";
   return `${v >= 0 ? "+" : "−"}${money(Math.abs(v))}`;
@@ -83,10 +90,8 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
           </button>
           <h2 style={{ margin: 0, fontSize: 24 }}>Holdings</h2>
           <div className="insight-foot" style={{ marginTop: 4, padding: 0, textAlign: "left" }}>
-            {portfolio && portfolio.count > 0
-              ? `${portfolio.count} holding${portfolio.count === 1 ? "" : "s"}${
-                  portfolio.sources?.length ? ` · rolled up across ${portfolio.sources.join(" + ")}` : ""
-                } · as of ${asOfLabel(portfolio.asOf)}`
+            {portfolio?.sources?.length
+              ? `Rolled up across ${portfolio.sources.join(" + ")} · as of ${asOfLabel(portfolio.asOf)}`
               : "Import a positions CSV to get started."}
           </div>
         </div>
@@ -129,8 +134,21 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
               </div>
               <div className="insight-cell">
                 <div className="label">Market conditions</div>
-                <div className="val" style={{ fontSize: 15, paddingTop: 3 }}>
-                  {macro ? `${macro.zone}${macro.sizingPct != null ? ` · ${macro.sizingPct}%` : ""}` : "—"}
+                <div className="val" style={{ paddingTop: 6 }}>
+                  {macro ? (
+                    <>
+                      <span className={`pill ${ZONE_TONE[macro.zone] ?? "accent"}`}>
+                        {macro.zone}
+                      </span>
+                      {macro.sizingPct != null && (
+                        <span className="muted" style={{ fontSize: 13, marginLeft: 6 }}>
+                          · {macro.sizingPct}%
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </div>
               </div>
             </div>
@@ -145,6 +163,10 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
                 <div className="insight-divider" />
               </>
             )}
+            <div className="insight-foot" style={{ textAlign: "left", padding: "2px 18px 10px" }}>
+              {portfolio.count} tracked position{portfolio.count === 1 ? "" : "s"} · re-import
+              anytime after a trade — this isn't meant to stay in sync automatically.
+            </div>
             {portfolio.count > 1 && (
               <div className="holdings-filter">
                 <ClearableInput
@@ -209,10 +231,6 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
                 </div>
               );
             })()}
-            <div className="insight-foot">
-              {portfolio.count} tracked position{portfolio.count === 1 ? "" : "s"} · re-import
-              anytime after a trade — this isn't meant to stay in sync automatically.
-            </div>
           </>
         ) : (
           <div className="insight-foot" style={{ padding: 8 }}>
