@@ -197,13 +197,6 @@ export default function App() {
       {view === "compare" && <CompareView onBack={() => setView("main")} />}
 
       <div className="pro-dashboard" style={{ display: view === "main" ? undefined : "none" }}>
-      <ProView
-        changeMode={changeMode}
-        onToggleChangeMode={toggleChangeMode}
-        risk={risk}
-        onRiskChange={changeRisk}
-      />
-
       <div className="check-col">
       <div className="check-tool">
       <form className="search" onSubmit={onSubmit}>
@@ -349,13 +342,21 @@ export default function App() {
         />
       )}
 
-      <WatchingToBuy onOpen={(t) => run(t)} />
-
       <HoldingsTeaser onOpen={() => setView("holdings")} />
+
+      <WatchingToBuy onOpen={(t) => run(t)} />
 
       <AlertsPanel />
 
       <BacktestCard />
+      </div>{/* check-col */}
+
+      <ProView
+        changeMode={changeMode}
+        onToggleChangeMode={toggleChangeMode}
+        risk={risk}
+        onRiskChange={changeRisk}
+      />
 
       {usage?.llm && (
         <div
@@ -366,7 +367,6 @@ export default function App() {
           {usage.calls === 1 ? "call" : "calls"}
         </div>
       )}
-      </div>{/* check-col */}
       </div>{/* pro-dashboard */}
     </div>
     <TickerTape

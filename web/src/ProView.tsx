@@ -344,8 +344,7 @@ export function ProView({
               <div className="subtitle">Quant scanner across the S&amp;P 500.</div>
             </span>
           </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <RiskControl value={risk} onChange={onRiskChange} />
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
             {rows.length > 0 && (
               <span className="subtitle">ranked {agoLabel(scanner?.asOf)}</span>
             )}
@@ -360,6 +359,10 @@ export function ProView({
         </div>
         {!collapsed && (
           <>
+        <div className="risk-toolbar">
+          <span className="risk-label">Risk tolerance</span>
+          <RiskControl value={risk} onChange={onRiskChange} />
+        </div>
         {refreshing.scanner && (
           <div className="insight-foot" style={{ paddingTop: 4 }}>
             Rescanning… this can take a few minutes.
