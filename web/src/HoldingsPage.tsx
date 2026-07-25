@@ -157,9 +157,9 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
                   className="holdings-sector"
                   value={sectorFilter}
                   onChange={(e) => setSectorFilter(e.target.value)}
-                  aria-label="Filter holdings by industry"
+                  aria-label="Filter holdings by sector"
                 >
-                  <option value="">All industries</option>
+                  <option value="">All sectors</option>
                   {portfolio.bySector.map((s) => (
                     <option key={s.sector} value={s.sector}>
                       {s.sector} ({s.count})
@@ -221,8 +221,8 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
   );
 }
 
-// Allocation by GICS sector ("industry"): a ranked set of meter rows. Clicking a
-// row filters the positions below to that industry (click again to clear).
+// Allocation by GICS sector: a ranked set of meter rows. Clicking a row filters
+// the positions below to that sector (click again to clear).
 function SectorBreakdown({
   bySector,
   active,
@@ -234,13 +234,13 @@ function SectorBreakdown({
 }) {
   return (
     <div className="sector-alloc">
-      <div className="sector-alloc-head">Allocation by industry</div>
+      <div className="sector-alloc-head">Allocation by sector</div>
       {bySector.map((s) => (
         <button
           key={s.sector}
           className={`sector-row${active === s.sector ? " active" : ""}`}
           onClick={() => onSelect(s.sector)}
-          title={active === s.sector ? "Clear industry filter" : `Show only ${s.sector}`}
+          title={active === s.sector ? "Clear sector filter" : `Show only ${s.sector}`}
         >
           <div className="sector-row-top">
             <span className="sector-name">

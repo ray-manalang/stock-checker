@@ -1173,7 +1173,7 @@ body:has(.tape) .page {
 .notif-meta { font-size: 11.5px; color: var(--text-3); margin-top: 4px; }
 .caption { font-size: 13px; color: var(--text-3); margin: -2px 0 12px; line-height: 1.5; }
 
-/* Allocation by industry (sector breakdown). */
+/* Allocation by sector (breakdown). */
 .sector-alloc { padding: 14px 18px 4px; }
 .sector-alloc-head {
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;

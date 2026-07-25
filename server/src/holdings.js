@@ -283,8 +283,8 @@ export function buildPortfolio(rawRows, flags, priceMap, { asOf } = {}) {
   };
 }
 
-/** Portfolio allocation grouped by GICS sector ("industry"): value, %, and
- *  position count per sector, sorted by value descending. */
+/** Portfolio allocation grouped by GICS sector: value, %, and position count
+ *  per sector, sorted by value descending. */
 export function sectorAllocation(positions, totalValue) {
   const bySector = new Map();
   for (const p of positions) {
