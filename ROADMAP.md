@@ -4,6 +4,13 @@ Written 2026-07-25, from a brainstorming session following the doc baseline at `
 `b544af4`. Read [ARCHITECTURE.md](ARCHITECTURE.md) for how the shipped app works today —
 this document only covers what's new, and assumes that baseline throughout.
 
+A visual reference for the new UI described below — the Holdings page, the demo-mode
+banner, the "add-on-dip" framing — lives at
+[`design/roadmap-mockup.html`](design/roadmap-mockup.html). It's illustrative, not
+production markup: open it in a browser to see the intended layout and interaction
+before building the real components, but don't lift its HTML/CSS wholesale — it doesn't
+share the app's actual component code, only its design tokens.
+
 This is a **full backlog, not a v1 cut**. Every idea from the brainstorm is in here,
 ordered into phases by dependency and by which items need lead time to pay off — not by
 what's "essential" versus "nice to have." Nothing below is scoped out unless it's
