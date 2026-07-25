@@ -77,12 +77,6 @@ export function AlertsPanel() {
       <div className="insight-head">
         <h3>Your alerts</h3>
       </div>
-      <div
-        className="insight-foot"
-        style={{ marginTop: 4, marginBottom: 6, textAlign: "left", paddingLeft: 18, paddingRight: 18 }}
-      >
-        Price-threshold alerts — deprioritized in favor of Watching to buy, but still here.
-      </div>
       <div className="insight-divider" />
       {alerts.map((a) => (
         <div key={a.id} className={`alert-row${a.status === "triggered" ? " triggered" : ""}`}>
