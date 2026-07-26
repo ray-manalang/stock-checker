@@ -189,6 +189,20 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
     }
   }
 
+  // Apply the active filters once, so the positions list and the count caption
+  // agree on what's shown.
+  const q = query.trim().toLowerCase();
+  const filtered = (portfolio?.positions ?? []).filter((p) => {
+    if (q && !`${p.ticker} ${p.name ?? ""}`.toLowerCase().includes(q)) return false;
+    if (sectorFilter && p.sector !== sectorFilter) return false;
+    if (institution && !p.sources.some((s) => s.source === institution)) return false;
+    if (filter === "gainers") return (p.gainLoss ?? 0) > 0;
+    if (filter === "losers") return (p.gainLoss ?? 0) < 0;
+    if (filter === "taxloss") return p.notes.some((n) => n.kind === "tax");
+    return true;
+  });
+  const isFiltered = !!(q || sectorFilter || institution || filter !== "all");
+
   return (
     <>
       <div
@@ -275,9 +289,10 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
               </>
             )}
             <div className="insight-foot" style={{ textAlign: "left", padding: "2px 18px 10px" }}>
-              <span style={{ color: "var(--up)" }}>●</span> Prices live · {portfolio.count} tracked
-              position{portfolio.count === 1 ? "" : "s"} · re-import anytime after a trade — this
-              isn't meant to stay in sync automatically.
+              <span style={{ color: "var(--up)" }}>●</span> Prices live ·{" "}
+              {isFiltered
+                ? `${filtered.length} of ${portfolio.count} tracked positions`
+                : `${portfolio.count} tracked position${portfolio.count === 1 ? "" : "s"}`}
             </div>
             {portfolio.count > 1 && (
               <div className="holdings-filter">
@@ -340,25 +355,13 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
                 </div>
               </div>
             )}
-            {(() => {
-              const q = query.trim().toLowerCase();
-              const filtered = portfolio.positions.filter((p) => {
-                if (q && !`${p.ticker} ${p.name ?? ""}`.toLowerCase().includes(q)) return false;
-                if (sectorFilter && p.sector !== sectorFilter) return false;
-                if (institution && !p.sources.some((s) => s.source === institution)) return false;
-                if (filter === "gainers") return (p.gainLoss ?? 0) > 0;
-                if (filter === "losers") return (p.gainLoss ?? 0) < 0;
-                if (filter === "taxloss") return p.notes.some((n) => n.kind === "tax");
-                return true;
-              });
-              return filtered.length ? (
-                filtered.map((p) => <Position key={p.ticker} p={p} onToggleTax={toggleTax} />)
-              ) : (
-                <div className="insight-foot" style={{ padding: "16px 18px", textAlign: "left" }}>
-                  No positions match this filter.
-                </div>
-              );
-            })()}
+            {filtered.length ? (
+              filtered.map((p) => <Position key={p.ticker} p={p} onToggleTax={toggleTax} />)
+            ) : (
+              <div className="insight-foot" style={{ padding: "16px 18px", textAlign: "left" }}>
+                No positions match this filter.
+              </div>
+            )}
           </>
         ) : (
           <div className="insight-foot" style={{ padding: 8 }}>
