@@ -51,10 +51,35 @@ export type CnbcVideo = {
   title: string;
   thumbnail: string | null;
   published: string | null;
+  source?: string;
 };
 export async function getCnbcVideos(force = false): Promise<CnbcVideo[]> {
   const url = force ? "/api/news/videos?force=1" : "/api/news/videos";
   return (await jsonOrThrow(await fetch(url))).data;
+}
+
+// ---------- video sources ----------
+export type VideoSource = { channelId: string; label: string };
+export async function getVideoSources(): Promise<VideoSource[]> {
+  return (await jsonOrThrow(await fetch("/api/news/sources"))).data;
+}
+export async function addVideoSource(url: string, label?: string): Promise<VideoSource[]> {
+  return (
+    await jsonOrThrow(
+      await fetch("/api/news/sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, label }),
+      }),
+    )
+  ).data;
+}
+export async function removeVideoSource(channelId: string): Promise<VideoSource[]> {
+  return (
+    await jsonOrThrow(
+      await fetch(`/api/news/sources/${encodeURIComponent(channelId)}`, { method: "DELETE" }),
+    )
+  ).data;
 }
 export async function addToWatchlist(ticker: string): Promise<WatchItem[]> {
   return (

@@ -278,9 +278,17 @@ app.get("/api/watchlist/quotes", async (_req, res) => {
   }
 });
 
-// ---------- CNBC videos (via CNBC Television's YouTube feed) ----------
-const CNBC_YT_CHANNEL = "UCrp_UI8XtuYfpiqluWLD7Lw"; // "CNBC Television"
-let _cnbcVideos = { at: 0, data: [] };
+// ---------- Market videos (YouTube RSS; user-configurable sources) ----------
+// Default source is CNBC Television; users add their own channels (Phase: video
+// sources). Sources live in settings as [{ channelId, label }].
+const DEFAULT_VIDEO_SOURCES = [
+  { channelId: "UCrp_UI8XtuYfpiqluWLD7Lw", label: "CNBC Television" },
+];
+
+function getVideoSources() {
+  const s = getSetting("videoSources", null);
+  return Array.isArray(s) ? s : DEFAULT_VIDEO_SOURCES;
+}
 
 function decodeEntities(s) {
   return String(s)
@@ -305,27 +313,118 @@ function parseYtFeed(xml) {
   return out;
 }
 
-// Latest CNBC market videos. Cached ~5 min; serves stale on upstream failure.
-// `?force=1` bypasses the cache (used by the card's manual refresh).
+// The channel's own name (the first <title>, before any <entry>).
+function feedTitle(xml) {
+  const head = xml.split("<entry>")[0] ?? xml;
+  const m = head.match(/<title>([^<]*)</);
+  return m ? decodeEntities(m[1]) : null;
+}
+
+async function fetchChannelFeed(channelId) {
+  const r = await fetch(
+    `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`,
+    { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(12000) },
+  );
+  if (!r.ok) throw new Error(`youtube ${r.status}`);
+  return r.text();
+}
+
+// Resolve a channel ID from a raw `UC…` id, a channel/feed URL, or a handle /
+// custom URL (fetches the page and extracts the channelId).
+async function resolveChannelId(input) {
+  const s = String(input ?? "").trim();
+  if (!s) return null;
+  const uc = s.match(/UC[\w-]{20,}/);
+  if (uc) return uc[0];
+  const url = /^https?:\/\//.test(s)
+    ? s
+    : `https://www.youtube.com/${s.startsWith("@") ? s : "@" + s}`;
+  try {
+    const r = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!r.ok) return null;
+    const html = await r.text();
+    const m =
+      html.match(/"(?:channelId|externalId)":"(UC[\w-]+)"/) ||
+      html.match(/\/channel\/(UC[\w-]+)/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+let _videos = { at: 0, key: "", data: [] };
+
+// Merge the latest videos across all configured sources, newest first.
+async function fetchAllVideos() {
+  const all = [];
+  for (const src of getVideoSources()) {
+    try {
+      for (const v of parseYtFeed(await fetchChannelFeed(src.channelId)).slice(0, 12)) {
+        all.push({ ...v, source: src.label });
+      }
+    } catch {
+      /* skip a failing source */
+    }
+  }
+  all.sort((a, b) => new Date(b.published || 0) - new Date(a.published || 0));
+  return all.slice(0, 24);
+}
+
+// Latest market videos across the configured sources. Cached ~5 min (keyed on
+// the source set); serves stale on upstream failure. `?force=1` bypasses cache.
 app.get("/api/news/videos", async (req, res) => {
   const now = Date.now();
   const force = req.query.force === "1" || req.query.force === "true";
-  if (!force && now - _cnbcVideos.at < 5 * 60 * 1000 && _cnbcVideos.data.length) {
-    return res.json({ data: _cnbcVideos.data, cached: true });
+  const key = getVideoSources().map((s) => s.channelId).join(",");
+  if (!force && _videos.key === key && now - _videos.at < 5 * 60 * 1000 && _videos.data.length) {
+    return res.json({ data: _videos.data, cached: true });
   }
   try {
-    const r = await fetch(
-      `https://www.youtube.com/feeds/videos.xml?channel_id=${CNBC_YT_CHANNEL}`,
-      { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(12000) },
-    );
-    if (!r.ok) throw new Error(`youtube ${r.status}`);
-    const data = parseYtFeed(await r.text()).slice(0, 12);
-    if (data.length) _cnbcVideos = { at: now, data };
-    res.json({ data: _cnbcVideos.data });
+    const data = await fetchAllVideos();
+    if (data.length) _videos = { at: now, key, data };
+    res.json({ data });
   } catch (err) {
-    if (_cnbcVideos.data.length) return res.json({ data: _cnbcVideos.data, stale: true });
+    if (_videos.data.length) return res.json({ data: _videos.data, stale: true });
     res.status(502).json({ error: err instanceof Error ? err.message : "videos unavailable" });
   }
+});
+
+// ---------- video sources ----------
+app.get("/api/news/sources", (_req, res) => res.json({ data: getVideoSources() }));
+
+app.post("/api/news/sources", async (req, res) => {
+  const channelId = await resolveChannelId(req.body?.url ?? req.body?.channelId);
+  if (!channelId) {
+    return res.status(400).json({
+      error: "Couldn't find a YouTube channel there. Paste a channel URL, @handle, or channel ID.",
+    });
+  }
+  const sources = getVideoSources();
+  if (sources.some((s) => s.channelId === channelId)) {
+    return res.status(409).json({ error: "That channel is already a source." });
+  }
+  let label = String(req.body?.label ?? "").trim();
+  if (!label) {
+    try {
+      label = feedTitle(await fetchChannelFeed(channelId)) ?? channelId;
+    } catch {
+      label = channelId;
+    }
+  }
+  const next = [...sources, { channelId, label }];
+  setSetting("videoSources", next);
+  _videos = { at: 0, key: "", data: [] };
+  res.json({ ok: true, data: next });
+});
+
+app.delete("/api/news/sources/:channelId", (req, res) => {
+  const next = getVideoSources().filter((s) => s.channelId !== req.params.channelId);
+  setSetting("videoSources", next);
+  _videos = { at: 0, key: "", data: [] };
+  res.json({ ok: true, data: next });
 });
 
 // Market indexes pinned at the front of the tape.

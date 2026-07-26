@@ -102,7 +102,10 @@ good snapshot in place and the UI labels it stale.
 | GET | `/api/watchlist/quotes` | — | `{ data: [{ ticker, name, price, changePct }] }` (6 h price cache) |
 | GET | `/api/tape` | — | `{ data: TapeItem[] }` — indexes, then watchlist, then top-20 scanner |
 | GET | `/api/quotes` | `?symbols=AAPL,MSFT` | `{ data: { SYM: { price, changePct } } }` — 60 s in-process cache |
-| GET | `/api/news/videos` | `?force=1` bypasses cache | `{ data: CnbcVideo[] }` — 5-min cache · 502 if no cache and upstream fails |
+| GET | `/api/news/videos` | `?force=1` bypasses cache | `{ data: Video[] }` — merged across sources, newest first; 5-min cache (keyed on the source set) · 502 if no cache and upstream fails |
+| GET | `/api/news/sources` | — | `{ data: [{ channelId, label }] }` — configured video sources (defaults to CNBC Television) |
+| POST | `/api/news/sources` | body `{ url, label? }` | `{ ok, data }` — resolves a channel URL / `@handle` / `UC…` id; 400 if unresolvable, 409 if duplicate |
+| DELETE | `/api/news/sources/:channelId` | — | `{ ok, data }` |
 | GET | `/api/alerts` | — | `{ data: Alert[] }` |
 | POST | `/api/alerts` | body `{ ticker, targetLow?, targetHigh? }` | `{ ok, alert, data }` · 400 if no ticker or no usable target |
 | PUT | `/api/alerts/:id` | body `{ targetLow?, targetHigh? }` | `{ ok, data }` — edit + re-arm · 400 if no usable target |
@@ -140,8 +143,12 @@ good snapshot in place and the UI labels it stale.
 `source:"index"`, then watchlist (`"watch"`), then the top 20 scanner rows not already
 present (`"scan"`). Scanner names are omitted entirely when the macro zone is `DEFENSIVE`.
 
-**`/api/news/videos`** reads CNBC Television's YouTube RSS feed
-(channel `UCrp_UI8XtuYfpiqluWLD7Lw`), 12 s timeout, hand-rolled regex XML parse, 12 items.
+**`/api/news/videos`** reads each configured source's YouTube RSS feed (12 s timeout,
+hand-rolled regex XML parse), merges them newest-first and tags each clip with its source
+label. Sources live in `settings.videoSources` (default: CNBC Television,
+`UCrp_UI8XtuYfpiqluWLD7Lw`) and are managed via `/api/news/sources`; adding one accepts a
+channel URL, `@handle`, or `UC…` id (a handle/custom URL is resolved by scraping the
+channel page for its `channelId`).
 
 ---
 

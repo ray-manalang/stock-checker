@@ -118,6 +118,7 @@ input {
 /* ---------- Latest from CNBC (video grid) ---------- */
 .cnbc-player {
   margin-bottom: 14px;
+  padding: 0 18px;
 }
 .cnbc-player iframe {
   width: 100%;
@@ -137,6 +138,7 @@ input {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 14px;
+  padding: 14px 18px 18px;
 }
 .cnbc-item {
   display: flex;
@@ -1302,3 +1304,26 @@ body:has(.tape) .page {
 /* Textarea variant: pin the × to the top-right corner. */
 .clearable-ta { position: relative; display: block; }
 .clearable-ta .clear-x { top: 10px; transform: none; }
+
+/* Video sources editor (Market videos card). */
+.vsrc-editor { padding: 12px 18px 4px; display: flex; flex-direction: column; gap: 10px; }
+.vsrc-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.vsrc-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--surface-2); border: 1px solid var(--hairline-soft);
+  border-radius: 999px; padding: 5px 6px 5px 12px; font-size: 12.5px; color: var(--text-2);
+}
+.vsrc-x {
+  background: none; border: none; color: var(--text-3); cursor: pointer;
+  font-size: 15px; line-height: 1; width: 18px; height: 18px; border-radius: 50%;
+}
+.vsrc-x:hover { color: var(--text); background: var(--hairline-soft); }
+.vsrc-add { display: flex; gap: 8px; }
+.vsrc-add input {
+  flex: 1; min-width: 160px;
+  background: var(--surface-2); border: 1px solid var(--hairline-soft);
+  border-radius: 10px; color: var(--text); padding: 8px 12px; font-size: 13px;
+  outline: none; font-family: inherit;
+}
+.vsrc-add input::placeholder { color: var(--text-3); }
+.vsrc-add input:focus { border-color: var(--hairline); }

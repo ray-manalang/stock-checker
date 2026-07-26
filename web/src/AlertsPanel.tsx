@@ -30,6 +30,15 @@ export function AlertsPanel() {
   const [adding, setAdding] = useState(false);
   const [newTicker, setNewTicker] = useState("");
   const [newPrice, setNewPrice] = useState("");
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem("alertsCollapsed") === "1",
+  );
+  const toggle = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      localStorage.setItem("alertsCollapsed", next ? "1" : "0");
+      return next;
+    });
 
   const refresh = () => getAlerts().then(setAlerts).catch(() => {});
   useEffect(() => {
@@ -55,28 +64,42 @@ export function AlertsPanel() {
     setAdding(false);
   }
 
+  const header = (
+    <div className="insight-head">
+      <button
+        className="collapse-btn"
+        onClick={toggle}
+        aria-expanded={!collapsed}
+        title={collapsed ? "Expand" : "Collapse"}
+      >
+        <span className="chev">{collapsed ? "▸" : "▾"}</span>
+        <h3>Your alerts</h3>
+      </button>
+    </div>
+  );
+
   if (alerts.length === 0 && !adding) {
     return (
       <div className="insight-card">
-        <div className="insight-head">
-          <h3>Your alerts</h3>
-        </div>
-        <div className="insight-foot" style={{ paddingTop: 6 }}>
-          No price alerts yet. Set one from any stock's answer card, or{" "}
-          <button className="linklike" onClick={() => setAdding(true)}>
-            add one here
-          </button>
-          .
-        </div>
+        {header}
+        {!collapsed && (
+          <div className="insight-foot" style={{ paddingTop: 6 }}>
+            No price alerts yet. Set one from any stock's answer card, or{" "}
+            <button className="linklike" onClick={() => setAdding(true)}>
+              add one here
+            </button>
+            .
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="insight-card">
-      <div className="insight-head">
-        <h3>Your alerts</h3>
-      </div>
+      {header}
+      {!collapsed && (
+      <>
       <div className="insight-divider" />
       {alerts.map((a) => (
         <div key={a.id} className={`alert-row${a.status === "triggered" ? " triggered" : ""}`}>
@@ -183,6 +206,8 @@ export function AlertsPanel() {
         >
           + Set a new alert
         </button>
+      )}
+      </>
       )}
     </div>
   );
