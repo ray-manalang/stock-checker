@@ -146,6 +146,7 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<HoldingsFilter>("all");
   const [sectorFilter, setSectorFilter] = useState<string>("");
+  const [institution, setInstitution] = useState<string>("");
 
   // Live intraday prices from the shared 60s poller (same one the tape and the
   // answer card use). We overlay them on the server's cached-close snapshot so
@@ -304,6 +305,21 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
                     </option>
                   ))}
                 </select>
+                {portfolio.sources.length > 1 && (
+                  <select
+                    className="holdings-sector"
+                    value={institution}
+                    onChange={(e) => setInstitution(e.target.value)}
+                    aria-label="Filter holdings by institution"
+                  >
+                    <option value="">All institutions</option>
+                    {portfolio.sources.map((src) => (
+                      <option key={src} value={src}>
+                        {src}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <div className="risk-seg" role="group" aria-label="Filter holdings">
                   {(
                     [
@@ -329,6 +345,7 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
               const filtered = portfolio.positions.filter((p) => {
                 if (q && !`${p.ticker} ${p.name ?? ""}`.toLowerCase().includes(q)) return false;
                 if (sectorFilter && p.sector !== sectorFilter) return false;
+                if (institution && !p.sources.some((s) => s.source === institution)) return false;
                 if (filter === "gainers") return (p.gainLoss ?? 0) > 0;
                 if (filter === "losers") return (p.gainLoss ?? 0) < 0;
                 if (filter === "taxloss") return p.notes.some((n) => n.kind === "tax");
