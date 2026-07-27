@@ -367,6 +367,9 @@ export default function App() {
 
       <AlertsPanel />
 
+      {/* Track record — a low-frequency credibility stat, tucked at the bottom */}
+      <BacktestCard />
+
       {usage?.llm && (
         <div
           className="center muted"
@@ -376,9 +379,6 @@ export default function App() {
           {usage.calls === 1 ? "call" : "calls"}
         </div>
       )}
-
-      {/* Track record — a low-frequency credibility stat, tucked at the bottom */}
-      <BacktestCard />
       </div>{/* check-col (research) */}
 
       {/* Home dashboard */}
