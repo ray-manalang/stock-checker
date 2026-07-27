@@ -362,6 +362,11 @@ export default function App() {
         />
       )}
 
+      {/* Watchlist-driven cards live with the watchlist, on Research */}
+      <WatchingToBuy onOpen={(t) => run(t)} />
+
+      <AlertsPanel />
+
       {usage?.llm && (
         <div
           className="center muted"
@@ -371,22 +376,14 @@ export default function App() {
           {usage.calls === 1 ? "call" : "calls"}
         </div>
       )}
+
+      {/* Track record — a low-frequency credibility stat, tucked at the bottom */}
+      <BacktestCard />
       </div>{/* check-col (research) */}
 
       {/* Home dashboard */}
       <div className="pro-dashboard" style={{ display: view === "main" ? undefined : "none" }}>
       <HoldingsTeaser onOpen={() => setView("holdings")} />
-
-      <WatchingToBuy
-        onOpen={(t) => {
-          setView("research");
-          run(t);
-        }}
-      />
-
-      <AlertsPanel />
-
-      <BacktestCard />
 
       <ProView
         changeMode={changeMode}
