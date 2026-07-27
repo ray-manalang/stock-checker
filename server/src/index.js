@@ -558,15 +558,35 @@ app.put("/api/settings", (req, res) => {
 
 // ---------- watchlist buy-signals (Phase 2.2) ----------
 // Per-ticker last verdict + notification state for the "Watching to buy" panel.
-app.get("/api/watchlist/signals", (_req, res) =>
+app.get("/api/watchlist/signals", async (_req, res) => {
+  const rows = listWatchlistVerdictState();
+  const tickers = rows.map((r) => r.ticker);
+  // resolveName covers the S&P 500; fill ADRs/ETFs/foreign names from the meta
+  // cache, then fetch anything still missing once via the sidecar (and cache it).
+  const names = {};
+  for (const [t, m] of Object.entries(getCompanyMeta(tickers))) {
+    if (m.name) names[t] = m.name;
+  }
+  const unknown = tickers.filter((t) => !names[t] && !resolveName(t));
+  if (unknown.length) {
+    try {
+      const fetched = await fetchCompanyMeta(unknown);
+      if (Object.keys(fetched).length) {
+        upsertCompanyMeta(fetched);
+        for (const [t, m] of Object.entries(fetched)) if (m.name) names[t] = m.name;
+      }
+    } catch {
+      /* best-effort — fall back to whatever resolved */
+    }
+  }
   res.json({
-    data: listWatchlistVerdictState().map((r) => ({
+    data: rows.map((r) => ({
       ...r,
-      name: resolveName(r.ticker),
+      name: names[r.ticker] ?? resolveName(r.ticker),
       ...priceChangeOf(getCachedSeries(r.ticker)),
     })),
-  }),
-);
+  });
+});
 
 // Run the daily watchlist scan now (instead of waiting for the cron).
 app.post("/api/watchlist/signals/check", async (_req, res) => {
