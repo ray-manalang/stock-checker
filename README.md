@@ -1,8 +1,8 @@
 # Market Specialist
 
 A beginner-first equity app. Type a ticker, get a plain-English answer to *"is this a
-good time to buy?"* on one screen — plus a Pro tab with a macro risk gate, a quant
-scanner over the largest US names, and Claude-scored fundamentals.
+good time to buy?"* on one screen — plus a Home dashboard with a macro risk gate, a quant
+scanner over the largest US names, and Claude-scored fundamentals, and a Holdings tab.
 
 Runs as a single container: Express API + built React UI + a Python sidecar for market
 data, with a SQLite store for snapshots, watchlist, alerts, and cached scores.
@@ -14,18 +14,19 @@ data, with a SQLite store for snapshots, watchlist, alerts, and cached scores.
 
 ---
 
-## Status — baseline as of commit `47b3e2a` (2026-07-23)
+## Status — current as of 2026-07-27
 
-This documentation set was written against `main` at `47b3e2a`. It describes what that
-commit deploys, not a verified reading of the running Home Assistant container. See
-[CHANGELOG.md](CHANGELOG.md) for the history and [ARCHITECTURE.md](ARCHITECTURE.md) for
-the full technical reference.
+This documentation set tracks `main`; it describes what the code deploys, not a verified
+reading of the running Home Assistant container. See [CHANGELOG.md](CHANGELOG.md) for the
+history and [ARCHITECTURE.md](ARCHITECTURE.md) for the full technical reference.
 
 ---
 
 ## What it does
 
-**Basic tab** — one search box and one answer card:
+Three nav tabs — **Home**, **Research**, **Holdings** — plus a Hide $ toggle.
+
+**Research tab** — one search box and one answer card:
 
 - Live price, day change (toggle % / $), and where today's price sits in its 52-week range
 - A verdict in plain English (*"Good time to buy"*, *"Wait for a dip"*, *"No rush — wait"*,
@@ -35,16 +36,23 @@ the full technical reference.
 - *"Show the details"* — 1-year price chart with the suggested buy zone shaded, plus
   momentum, trend, volatility, and drawdown
 - Watchlist chips, recently-checked chips, and a one-click price alert
+- **Watching to buy** — each watched ticker's name, live price, day change, and latest
+  verdict; notifies the day one first turns into "Good time to buy"
+- **Your alerts** and a **Track record** (how past verdicts scored) round out the bottom
 - Every ⓘ pulls its wording from a single glossary, so the jargon is explained inline
 
-**Pro tab** — three cards above the same check tool:
+**Home tab** — a holdings teaser over three market cards:
 
 - **Market conditions** — 6 weighted macro signals → composite 0–100 → a deployment zone
   (`FULL DEPLOY` / `REDUCED` / `DEFENSIVE`) with position sizing
 - **Top-ranked stocks** — percentile-ranked quant scanner, gated by the macro zone,
   optionally blended with Claude's fundamental scores (shows quant-vs-analyst
   disagreements as upgrades/downgrades)
-- **Latest from CNBC** — market video, playable in-app
+- **Market videos** — a scrollable grid of market video, playable in-app, with custom
+  YouTube sources you can add or remove
+
+**Holdings tab** — import brokerage CSVs to roll up positions with gain/loss, concentration,
+GICS-sector allocation, sector/institution filters, and live intraday prices.
 
 **Everywhere** — a scrolling ticker tape (indexes + watchlist + top-ranked) pinned to the
 bottom, and a shared 60-second live-price poller so every price on screen agrees.
@@ -154,7 +162,7 @@ server/
     scheduler.js        node-cron jobs (macro, scanner, analyst, alerts)
     db.js               SQLite schema + every query
     stocks.js           Market data: sidecar → Twelve Data → Yahoo → Stooq → fixtures
-    analyze.js          Single-ticker pipeline for the Basic view
+    analyze.js          Single-ticker pipeline for the Research check tool
     indicators.js       RSI, EMA/SMA, volatility, drawdown, relative strength
     language.js         Numbers → beginner words ("Running hot", "Looks cheap")
     verdict.js          Deterministic verdict when Claude is unavailable
@@ -165,15 +173,20 @@ server/
     scanner/            L2 — universe, factors, percentile ranking
     analyst/            L3 — Claude fundamental scoring + quant/fundamental blender
   scripts/
-    yf_fetch.py         Python sidecar: chart | multi | quote | fundamentals
+    yf_fetch.py         Python sidecar: chart | multi | quote | names | fundamentals
 web/
   src/
-    App.tsx             Basic view — search, answer card, watchlist, alerts
-    ProView.tsx         Pro view — macro card, top-ranked card, refresh/poll logic
+    App.tsx             Nav (Home/Research/Holdings) + Research check tool & cards
+    ProView.tsx         Home dashboard — macro card, top-ranked card, refresh/poll logic
+    HoldingsPage.tsx    Holdings — CSV import, roll-up, sector allocation, filters
+    WatchingToBuy.tsx   Watchlist buy-signal cards (name, live price, verdict)
+    AlertsPanel.tsx     "Your alerts" — list/edit/delete price alerts
+    BacktestCard.tsx    "Track record" — verdict hit-rate report
     TickerTape.tsx      Fixed scrolling footer
-    CnbcVideos.tsx      CNBC video card
+    CnbcVideos.tsx      Market videos card (multi-source YouTube grid)
     livePrices.ts       Shared 60s live-price store (refcounted, deduped)
     lib/glossary.ts     Single source of every ⓘ explanation
+    lib/useCollapsed.ts Per-card collapse state (localStorage-backed)
     index.css           Design tokens + all layout (ported from Minset)
 01 - … 05 - *.js        Legacy Google Apps Script prototype (not part of the app)
 ```

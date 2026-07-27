@@ -90,7 +90,7 @@ The container clock is UTC, but the market-clock jobs are pinned to `MARKET_TZ`
 | Alerts | every 10 min | Buy-zone alert checks |
 
 Macro and scanner also run once at boot when their tables are empty. Any layer can be
-recomputed on demand from the Pro tab's Refresh buttons.
+recomputed on demand from the Home dashboard's Refresh buttons.
 
 ## Updates
 

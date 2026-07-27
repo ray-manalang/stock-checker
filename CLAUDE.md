@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Market Specialist** — a beginner-first equity app: a web UI + Node API that answers "is
 this a good time to buy?" in plain English on one screen, with macro/scanner/analyst tools
-behind a Pro tab. Design ported from the Minset watch app; analytics ported from the
+on a Home dashboard. Design ported from the Minset watch app; analytics ported from the
 `stock-analyzer` Python repo. Data is free (Yahoo Finance + FRED); the LLM is Claude.
 
 The **repo, npm workspaces, container, and SQLite file are named `stock-checker`**; the
@@ -65,16 +65,24 @@ since the container runs UTC. Macro and scanner also run on boot when their tabl
   on a cron and emails via Resend (optional — otherwise it just marks them triggered).
 - **Tape + quotes**: `/api/tape` (indexes + watchlist + top-20 scanner) and `/api/quotes`
   (60s in-process cache) feed the footer marquee and the shared live-price store.
-- **CNBC**: `/api/news/videos` reads CNBC Television's YouTube RSS, 5-min server cache.
+- **Market videos**: `/api/news/videos` merges each configured source's YouTube RSS
+  (5-min cache, keyed on the source set); sources live in `settings.videoSources` (default
+  CNBC Television) and are managed via `/api/news/sources` (GET/POST/DELETE — POST resolves
+  a channel URL / `@handle` / `UC…` id).
 
 `POST /api/refresh/:layer` (macro|scanner|analyst) kicks a background recompute.
 
 **Dual-mode server**: `index.js` serves the built React app when `STATIC_DIR` is set
 (production/Docker), else API-only with Vite proxying in dev. No auth on any route — LAN only.
 
-**Web** (`web/`): `App.tsx` (Basic view — search, answer card, watchlist, alerts) +
-`ProView.tsx` (macro + scanner + CNBC). Pro renders *above* the Basic check tool rather than
-replacing it. `TickerTape.tsx` is a fixed footer in both views. `livePrices.ts` is a single
+**Web** (`web/`): three nav tabs, all in `App.tsx` (rendered with `display:none` toggling,
+not remounted — mounted components keep polling). **Home** (`main`) is the at-a-glance view:
+holdings teaser + `ProView.tsx` (Market conditions/macro + Top-ranked/scanner + Market
+videos). **Research** owns everything ticker/watchlist: the check tool (search, recents,
+watchlist), the answer card, then the watchlist-driven cards — `WatchingToBuy.tsx`,
+`AlertsPanel.tsx` ("Your alerts"), and `BacktestCard.tsx` ("Track record") at the bottom.
+**Holdings** is `HoldingsPage.tsx`. A `?check=SYM` query param opens Research on that ticker
+(HA deep-links). `TickerTape.tsx` is a fixed footer in every view. `livePrices.ts` is a single
 refcounted 60s poller every price on screen subscribes to — add new price displays there
 rather than polling separately. Components in `web/src/components/` (InfoTip, PriceChart,
 SegmentedControl); design tokens in `web/src/index.css`; plain-language copy in
@@ -93,9 +101,11 @@ exception, inline in `ProView.tsx`).
 - Design system: dark-only, **system font stack** (`--font` in `index.css` — no web fonts,
   deliberately), `tabular-nums` on figures. Tokens ported from Minset (`--bg:#000`, `--surface:#0e0e0f`, `--radius:18px`,
   `--maxw:900px`, iOS up/down colors).
-- Client persistence is three localStorage keys (`changeMode`, `macroCollapsed`,
-  `scannerCollapsed`); everything else — including risk tolerance (the `settings` table) —
-  is server-side SQLite.
+- Client persistence is a handful of localStorage keys: `changeMode`, `blurAmounts`
+  (Hide $), and per-card collapse flags (`macroCollapsed`, `scannerCollapsed`,
+  `sectorAllocCollapsed`, `alertsCollapsed`, `holdingsTeaserCollapsed`, `watchingCollapsed`,
+  `trackRecordCollapsed` — all via the shared `lib/useCollapsed.ts` hook). Everything else —
+  including risk tolerance (the `settings` table) — is server-side SQLite.
 - Snapshot endpoints return HTTP 200 with `data: null` before the first run — handle the
   null, don't expect a 404.
 - `STOCK_FIXTURES=1` serves deterministic demo data (never used unless opted in).

@@ -113,7 +113,7 @@ good snapshot in place and the UI labels it stale.
 | POST | `/api/alerts/check` | — | `{ ok, checked, triggered }` — runs synchronously |
 | GET | `/api/settings` | — | `{ riskTolerance, riskProfiles }` |
 | PUT | `/api/settings` | body `{ riskTolerance? }` | `{ ok, riskTolerance }` |
-| GET | `/api/watchlist/signals` | — | `{ data: WatchSignal[] }` — per-ticker last verdict + notify state |
+| GET | `/api/watchlist/signals` | — | `{ data: WatchSignal[] }` — per-ticker last verdict + notify state, enriched with `name` (resolved via S&P table → `company_names` cache → one-time sidecar fetch) and cached `price`/`changePct` (the client overlays the live poller on top) |
 | POST | `/api/watchlist/signals/check` | — | `{ ok, checked, notified }` — runs the daily scan now |
 | GET | `/api/holdings` | — | `{ data: Portfolio, macro }` — rolled-up positions (gain/loss, concentration %, GICS sector, notes) + `bySector` allocation |
 | POST | `/api/holdings/preview` | body `{ csv }` | `{ data: { headers, sample, rowCount, suggestedMapping } }` |
@@ -464,12 +464,10 @@ still flips** — the status change is the in-app signal. `ALERT_FROM` defaults 
 ## Frontend
 
 `web/` — Vite 6, React 19, TypeScript, recharts. **No router**; a single `useState`
-switches between two tabs rendered by a `SegmentedControl`: **Basic** and **Pro**.
+switches between three nav tabs — **Home**, **Research**, **Holdings** — all rendered by
+`App.tsx` with `display:none` toggling (mounted, so they keep polling), plus a Hide $ toggle.
 
-Pro does not replace Basic — it renders the macro/scanner/CNBC cards *above* the same check
-tool, which stays mounted and usable.
-
-**Basic view** (`App.tsx`)
+**Research view** (`App.tsx`) — the ticker check tool and everything watchlist-derived
 
 - Search form → `GET /api/check/:sym`; recently-checked chips; watchlist chips with inline
   add/remove
@@ -480,9 +478,12 @@ tool, which stays mounted and usable.
   (`?fresh=1`)
 - *"Why this call?"* `<details>` ships **open**; *"Show the details"* (chart + 4 metrics +
   fundamental dimensions) ships **closed**
-- Usage footer appears only when Claude is configured
+- Below the answer card, the watchlist-driven cards: **Watching to buy** (`WatchingToBuy.tsx`
+  — each row shows ticker + company name + live price + daily change + verdict, collapsible),
+  **Your alerts** (`AlertsPanel.tsx`, collapsible), then a usage footer (only when Claude is
+  configured) and **Track record** (`BacktestCard.tsx`, collapsible) at the very bottom
 
-**Pro view** (`ProView.tsx`)
+**Home dashboard** (`ProView.tsx`, rendered under a holdings teaser)
 
 - **Market conditions** — collapsible (persisted), zone pill, 3 headline cells, the 6
   signals with per-signal ⓘ that includes the live detail string, "updated Nm ago",
@@ -492,8 +493,9 @@ tool, which stays mounted and usable.
   disagreements (rank shift ≥ 3)" block, then up to 20 scrollable rows. Rows with analyst
   data expand to show dimension chips, the fundamental score, the rank move, and Claude's
   notes.
-- **Latest from CNBC** — thumbnails, in-page `youtube-nocookie` embed, 5-min auto-refresh,
-  manual Refresh
+- **Market videos** (`CnbcVideos.tsx`) — a scrollable 4×3 grid of thumbnails with an in-page
+  `youtube-nocookie` embed, 5-min auto-refresh, manual Refresh, and a Sources manager
+  (add by channel URL / `@handle` / `UC…` id, remove chips) backed by `/api/news/sources`
 - Refresh polling windows: macro ~5 min (60 × 5 s), scanner and analyst ~20 min (80 × 15 s),
   sized for Twelve Data pacing and the async batch API
 
@@ -508,18 +510,22 @@ instant load; the Holdings page then overlays the live poller on the client (`li
 recomputing market value, gain/loss, totals, concentration, and the sector allocation.
 
 **Timers running concurrently**: live prices 60 s · tape reload 60 s · macro+scanner poll
-30 s · CNBC 5 min.
+30 s · Market videos 5 min.
 
 **Views** (`App.tsx`): the former Basic/Pro toggle is gone. Nav switches between `main` (the
-Home dashboard — holdings/alerts/track-record teasers, macro, scanner, CNBC), `research` (the
-ticker check tool — search, recents, watchlist, answer card), and `holdings`
-(`HoldingsPage.tsx`). A `?check=SYM` query param opens the Research view on that ticker (used
-by HA notifications).
+Home dashboard — holdings teaser + macro, scanner, and Market videos), `research` (the ticker
+check tool — search, recents, watchlist, answer card — followed by the watchlist-driven cards
+Watching to buy, Your alerts, and Track record), and `holdings` (`HoldingsPage.tsx`). The
+watchlist cards live on Research because they're all watchlist-derived; Home stays the
+at-a-glance market/portfolio picture. A `?check=SYM` query param opens Research on that ticker
+(used by HA notifications).
 
-**Client-side persistence** is three localStorage keys only: `changeMode` (`pct`/`abs`),
-`macroCollapsed`, `scannerCollapsed`. Risk tolerance is **server-side** (`settings` table)
-since it drives server math; watchlist, alerts, holdings, and recent checks also live
-server-side.
+**Client-side persistence** is a small set of localStorage keys: `changeMode` (`pct`/`abs`),
+`blurAmounts` (Hide $), and per-card collapse flags (`macroCollapsed`, `scannerCollapsed`,
+`sectorAllocCollapsed`, `alertsCollapsed`, `holdingsTeaserCollapsed`, `watchingCollapsed`,
+`trackRecordCollapsed`) — the collapse flags all go through the shared `lib/useCollapsed.ts`
+hook. Risk tolerance is **server-side** (`settings` table) since it drives server math;
+watchlist, alerts, holdings, and recent checks also live server-side.
 
 **Glossary** (`lib/glossary.ts`) is the single source for all 19 ⓘ explanations — the
 analyst dimension copy is the one exception and lives in `ProView.tsx`.

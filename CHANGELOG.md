@@ -10,6 +10,80 @@ project is not versioned; commits are the unit of record.
 
 ---
 
+## 2026-07-27 — Watching-to-buy polish & Home declutter
+
+### Added
+
+- **"Watching to buy" rows now carry data.** Each row shows the company name, live price (via
+  the shared quote poller), and a colored daily change alongside the verdict.
+  `GET /api/watchlist/signals` resolves the name (S&P table → `company_names` cache →
+  one-time sidecar fetch) and a cached-price fallback the client overlays.
+- **Collapsible cards.** Your holdings, Watching to buy, and Track record gained chevron
+  toggles, persisted per card via the shared `web/src/lib/useCollapsed.ts` hook.
+
+### Changed
+
+- **Home decluttered.** The watchlist-driven cards (Watching to buy, Your alerts, Track
+  record) moved off Home onto **Research**, next to the watchlist they derive from. Home is
+  now the at-a-glance picture: holdings teaser + market conditions + top-ranked + videos.
+  Track record sits at the bottom of Research, above the Claude-usage footer.
+- Non-S&P holdings (ADRs / foreign names like TSM, ENB, SNY) now resolve a GICS sector via a
+  normalized yfinance-sector map instead of showing "Unclassified".
+
+### Fixed
+
+- Inset the "Watching to buy" rows and the Track record card body so their content no longer
+  touches the card edge.
+
+---
+
+## 2026-07-26
+
+### Added
+
+- **Custom video sources.** Market videos gained a Sources manager — add a channel by URL,
+  `@handle`, or `UC…` id; remove sources as chips — backed by `/api/news/sources`
+  (GET/POST/DELETE) and stored in `settings.videoSources`.
+- **Institution filter** on Holdings, alongside the existing sector filter.
+
+### Changed
+
+- Market videos render as a fixed 4×3 scrollable grid; video cards no longer touch the edge.
+- "Your alerts" became collapsible.
+- The Holdings "N tracked positions" count now reflects the active filters.
+
+### Removed
+
+- The "re-import anytime after a trade" caveat from Holdings.
+
+---
+
+## 2026-07-25 — Holdings & scanner data polish
+
+Late-day refinements on top of the roadmap.
+
+### Added
+
+- **Name + GICS sector scraped from the S&P 500 Wikipedia table** into `company_names` (new
+  `sector` column); holdings and the scanner resolve names/sectors from it, fetching anything
+  still missing once via the sidecar `names` command (then cached). Fixed a Parsoid-markup
+  regression that had silently reduced the scrape to ~100 names.
+- **Live intraday prices on Holdings** via the shared poller — instant cached load, then a
+  client-side overlay recomputing value / gain-loss / concentration / sector allocation.
+- **Allocation by sector** analytic on Holdings (collapsible) with a sector filter.
+- A clear "×" in every text box (`ClearableInput`); company names + a holding count and a
+  market-conditions pill on the Holdings page.
+
+### Changed
+
+- Relabeled holdings "industry" → "sector" for consistency with the scanner.
+
+### Removed
+
+- The "NEW" badges from the home cards; the "Your alerts" subtitle (and fixed its padding).
+
+---
+
 ## 2026-07-25 — Enhancement roadmap (Phases 1–5)
 
 Implemented the full [ROADMAP.md](ROADMAP.md) backlog: personalization (holdings),
