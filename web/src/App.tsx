@@ -28,6 +28,7 @@ import { BacktestCard } from "./BacktestCard";
 import { HoldingsPage } from "./HoldingsPage";
 import { GLOSSARY } from "./lib/glossary";
 import { money, num, pct, pointStr, type ChangeMode } from "./lib/format";
+import { useCollapsed } from "./lib/useCollapsed";
 
 function toneClass(t: Tone): string {
   return t;
@@ -674,6 +675,7 @@ function WhyExpander({ data }: { data: CheckResponse }) {
 function HoldingsTeaser({ onOpen }: { onOpen: () => void }) {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [ready, setReady] = useState(false);
+  const [collapsed, toggle] = useCollapsed("holdingsTeaserCollapsed");
   useEffect(() => {
     let live = true;
     getHoldings()
@@ -689,12 +691,21 @@ function HoldingsTeaser({ onOpen }: { onOpen: () => void }) {
   return (
     <div className="insight-card">
       <div className="insight-head">
-        <h3>Your holdings</h3>
+        <button
+          className="collapse-btn"
+          onClick={toggle}
+          aria-expanded={!collapsed}
+          title={collapsed ? "Expand" : "Collapse"}
+        >
+          <span className="chev">{collapsed ? "▸" : "▾"}</span>
+          <h3>Your holdings</h3>
+        </button>
         <button className="btn-ghost btn-sm" onClick={onOpen}>
           {has ? "View holdings →" : "Import →"}
         </button>
       </div>
-      {has ? (
+      {!collapsed &&
+        (has ? (
         <div className="insight-cells" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
           <div className="insight-cell">
             <div className="label">Total value</div>
@@ -709,13 +720,13 @@ function HoldingsTeaser({ onOpen }: { onOpen: () => void }) {
             </div>
           </div>
         </div>
-      ) : (
-        <div className="insight-foot" style={{ paddingTop: 6 }}>
-          {ready
-            ? "See what you own alongside the verdicts — import an aggregated positions CSV to personalize the app."
-            : "Loading…"}
-        </div>
-      )}
+        ) : (
+          <div className="insight-foot" style={{ paddingTop: 6 }}>
+            {ready
+              ? "See what you own alongside the verdicts — import an aggregated positions CSV to personalize the app."
+              : "Loading…"}
+          </div>
+        ))}
     </div>
   );
 }

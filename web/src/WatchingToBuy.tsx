@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getWatchSignals, type WatchSignal } from "./api";
+import { useCollapsed } from "./lib/useCollapsed";
 
 function agoLabel(iso?: string | null): string {
   if (!iso) return "";
@@ -17,6 +18,7 @@ function agoLabel(iso?: string | null): string {
 export function WatchingToBuy({ onOpen }: { onOpen: (ticker: string) => void }) {
   const [signals, setSignals] = useState<WatchSignal[]>([]);
   const [ready, setReady] = useState(false);
+  const [collapsed, toggle] = useCollapsed("watchingCollapsed");
 
   useEffect(() => {
     let live = true;
@@ -34,8 +36,18 @@ export function WatchingToBuy({ onOpen }: { onOpen: (ticker: string) => void }) 
   return (
     <div className="insight-card">
       <div className="insight-head">
-        <h3>Watching to buy</h3>
+        <button
+          className="collapse-btn"
+          onClick={toggle}
+          aria-expanded={!collapsed}
+          title={collapsed ? "Expand" : "Collapse"}
+        >
+          <span className="chev">{collapsed ? "▸" : "▾"}</span>
+          <h3>Watching to buy</h3>
+        </button>
       </div>
+      {!collapsed && (
+      <>
       <div className="caption">
         Notifies only the day a verdict first turns into "Good time to buy" — not every day it
         stays one — and only while market conditions currently allow new positions.
@@ -71,6 +83,8 @@ export function WatchingToBuy({ onOpen }: { onOpen: (ticker: string) => void }) 
         Reuses your existing watchlist — nothing new to add. A ticker can sit here and in Holdings
         at once.
       </div>
+      </>
+      )}
     </div>
   );
 }

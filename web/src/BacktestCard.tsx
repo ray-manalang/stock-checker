@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getBacktest, type Backtest } from "./api";
+import { useCollapsed } from "./lib/useCollapsed";
 
 const LABELS: Record<string, string> = {
   BUY: "Buy calls",
@@ -14,6 +15,7 @@ export function BacktestCard() {
   const [data, setData] = useState<Backtest | null>(null);
   const [loading, setLoading] = useState(false);
   const [opened, setOpened] = useState(false);
+  const [collapsed, toggle] = useCollapsed("trackRecordCollapsed");
 
   async function load() {
     setOpened(true);
@@ -30,13 +32,23 @@ export function BacktestCard() {
   return (
     <div className="insight-card">
       <div className="insight-head">
-        <h3>Track record</h3>
-        {!opened && (
+        <button
+          className="collapse-btn"
+          onClick={toggle}
+          aria-expanded={!collapsed}
+          title={collapsed ? "Expand" : "Collapse"}
+        >
+          <span className="chev">{collapsed ? "▸" : "▾"}</span>
+          <h3>Track record</h3>
+        </button>
+        {!opened && !collapsed && (
           <button className="btn-ghost btn-sm" onClick={load}>
             Show hit rate
           </button>
         )}
       </div>
+      {!collapsed && (
+      <>
       <div className="insight-foot" style={{ marginTop: 4 }}>
         Were past verdicts right? Graded on direction over a 90-day window (Hold graded loosely —
         no large move either way).
@@ -83,6 +95,8 @@ export function BacktestCard() {
             </>
           )}
         </>
+      )}
+      </>
       )}
     </div>
   );
