@@ -29,10 +29,10 @@ import {
   listHoldingsRaw,
   setHoldingFlag,
   verdictLogStats,
-  getCompanyNames,
-  upsertCompanyNames,
+  getCompanyMeta,
+  upsertCompanyMeta,
 } from "./db.js";
-import { fetchSeriesMulti, liveQuotes, fetchCompanyNames } from "./stocks.js";
+import { fetchSeriesMulti, liveQuotes, fetchCompanyMeta } from "./stocks.js";
 import {
   startScheduler,
   runMacro,
@@ -40,7 +40,7 @@ import {
   runAnalystJob,
 } from "./scheduler.js";
 import { blend } from "./analyst/blender.js";
-import { resolveName } from "./scanner/universe.js";
+import { resolveName, resolveSector } from "./scanner/universe.js";
 import { checkAlerts } from "./alerts.js";
 import { RISK_PROFILES, DEFAULT_RISK, normalizeRisk } from "./risk.js";
 import {
@@ -606,20 +606,30 @@ app.get("/api/holdings", async (_req, res) => {
   try {
     const tickers = heldTickers();
     const priceMap = await holdingsPriceMap(tickers);
-    // Resolve company names: resolveName covers the S&P 500 (scraped table +
-    // static map); fill the rest (ETFs, funds, non-S&P names) from the sidecar
-    // name cache, and fetch any still-unknown names once via the sidecar (then
-    // cached — this only runs the first time such a ticker is held).
-    const names = getCompanyNames(tickers);
-    const unknown = tickers.filter((t) => !names[t] && !resolveName(t));
+    // Resolve company name + sector. resolveName/resolveSector cover the S&P 500
+    // (scraped table + static map); fill the rest (ADRs, foreign names, ETFs)
+    // from the meta cache, and fetch anything still missing once via the sidecar
+    // (then cached — only runs the first time such a ticker is held).
+    const names = {};
+    const sectors = {};
+    for (const [t, m] of Object.entries(getCompanyMeta(tickers))) {
+      if (m.name) names[t] = m.name;
+      if (m.sector) sectors[t] = m.sector;
+    }
+    const unknown = tickers.filter(
+      (t) => (!names[t] && !resolveName(t)) || (!sectors[t] && !resolveSector(t)),
+    );
     if (unknown.length) {
-      const fetched = await fetchCompanyNames(unknown);
+      const fetched = await fetchCompanyMeta(unknown);
       if (Object.keys(fetched).length) {
-        upsertCompanyNames(fetched);
-        Object.assign(names, fetched);
+        upsertCompanyMeta(fetched);
+        for (const [t, m] of Object.entries(fetched)) {
+          if (m.name) names[t] = m.name;
+          if (m.sector) sectors[t] = m.sector;
+        }
       }
     }
-    const portfolio = rollupHoldings(priceMap, names);
+    const portfolio = rollupHoldings(priceMap, names, sectors);
     const macro = latestMacro();
     res.json({
       data: portfolio,

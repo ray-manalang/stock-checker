@@ -62,3 +62,27 @@ export const SECTORS = {
 export function sectorOf(ticker) {
   return SECTORS[ticker] ?? null;
 }
+
+// yfinance uses its own sector taxonomy; map it to the GICS labels the S&P 500
+// scrape and the static map above use, so a held ADR/foreign name (whose sector
+// comes from yfinance) groups with its S&P peers in the allocation and filter.
+const YF_TO_GICS = {
+  Technology: "Information Technology",
+  "Financial Services": "Financials",
+  Healthcare: "Health Care",
+  "Consumer Cyclical": "Consumer Discretionary",
+  "Consumer Defensive": "Consumer Staples",
+  "Basic Materials": "Materials",
+  Energy: "Energy",
+  Industrials: "Industrials",
+  "Real Estate": "Real Estate",
+  Utilities: "Utilities",
+  "Communication Services": "Communication Services",
+};
+
+/** Normalize a yfinance sector to the GICS label used elsewhere (pass-through
+ *  if already GICS or unknown). */
+export function normalizeSector(s) {
+  if (!s) return null;
+  return YF_TO_GICS[s] ?? s;
+}

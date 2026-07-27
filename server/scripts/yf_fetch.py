@@ -167,19 +167,21 @@ def cmd_quote(symbols):
 
 
 def cmd_names(symbols):
-    """Best-effort company name per symbol (for the holdings name cache). Uses
-    get_info; fails soft to null per ticker."""
+    """Best-effort company name + sector per symbol (for the holdings meta
+    cache). Uses get_info; fails soft to null per field/ticker."""
     import yfinance as yf
 
     out = {}
     for sym in symbols:
         name = None
+        sector = None
         try:
             info = yf.Ticker(sym).get_info()
             name = info.get("longName") or info.get("shortName") or None
+            sector = info.get("sector") or None
         except Exception:
-            name = None
-        out[sym] = name
+            pass
+        out[sym] = {"name": name, "sector": sector}
     return out
 
 

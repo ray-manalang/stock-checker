@@ -143,6 +143,7 @@ export function db() {
   for (const ddl of [
     `ALTER TABLE scanner_results ADD COLUMN sector TEXT`,
     `ALTER TABLE scanner_results ADD COLUMN sector_rank INTEGER`,
+    `ALTER TABLE company_names ADD COLUMN sector TEXT`,
   ]) {
     try {
       _db.exec(ddl);
@@ -317,29 +318,36 @@ export function setHoldingFlag(ticker, taxAdvantaged) {
     .run(ticker, taxAdvantaged ? 1 : 0, new Date().toISOString());
 }
 
-// ---------- company names cache ----------
-/** Cached company names for the given tickers → { ticker: name }. */
-export function getCompanyNames(tickers) {
+// ---------- company meta cache (name + sector) ----------
+/** Cached { ticker: { name, sector } } for the given tickers (fields may be null). */
+export function getCompanyMeta(tickers) {
   if (!tickers?.length) return {};
   const placeholders = tickers.map(() => "?").join(",");
   const out = {};
   for (const r of db()
-    .prepare(`SELECT ticker, name FROM company_names WHERE ticker IN (${placeholders})`)
+    .prepare(`SELECT ticker, name, sector FROM company_names WHERE ticker IN (${placeholders})`)
     .all(...tickers)) {
-    if (r.name) out[r.ticker] = r.name;
+    out[r.ticker] = { name: r.name ?? null, sector: r.sector ?? null };
   }
   return out;
 }
 
-/** Upsert a { ticker: name } map (skips null/empty names). */
-export function upsertCompanyNames(map) {
+/** Upsert a { ticker: { name, sector } } map. Preserves an existing name/sector
+ *  when the incoming value is null (so a sector-only fetch doesn't wipe a name). */
+export function upsertCompanyMeta(map) {
   const at = new Date().toISOString();
   const stmt = db().prepare(
-    `INSERT OR REPLACE INTO company_names (ticker, name, updated_at) VALUES (?, ?, ?)`,
+    `INSERT INTO company_names (ticker, name, sector, updated_at) VALUES (@ticker, @name, @sector, @at)
+     ON CONFLICT(ticker) DO UPDATE SET
+       name = COALESCE(@name, name),
+       sector = COALESCE(@sector, sector),
+       updated_at = @at`,
   );
   const tx = db().transaction((entries) => {
-    for (const [ticker, name] of entries) {
-      if (name) stmt.run(ticker, name, at);
+    for (const [ticker, m] of entries) {
+      if (m?.name || m?.sector) {
+        stmt.run({ ticker, name: m.name ?? null, sector: m.sector ?? null, at });
+      }
     }
   });
   tx(Object.entries(map ?? {}));

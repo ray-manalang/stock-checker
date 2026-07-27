@@ -6,6 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { normalizeSector } from "./scanner/sectors.js";
 
 const execFileP = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -545,18 +546,22 @@ export async function liveQuotes(symbols) {
 }
 
 /**
- * Best-effort company names for a set of symbols via the sidecar → { SYM: name }.
- * Used to fill the holdings name cache for tickers outside the static NAMES map
- * (ETFs, funds, dual-class shares). Returns {} if the sidecar is unavailable.
+ * Best-effort company name + GICS sector for a set of symbols via the sidecar →
+ * { SYM: { name, sector } }. Fills the holdings meta cache for tickers outside
+ * the S&P 500 (ADRs, foreign names, ETFs). Sector is normalized to GICS labels.
+ * Returns {} if the sidecar is unavailable.
  */
-export async function fetchCompanyNames(symbols) {
+export async function fetchCompanyMeta(symbols) {
   if (!symbols?.length || !yfEnabled()) return {};
   try {
     const r = await runYf(["names", ...symbols]);
     const out = {};
     if (r) {
-      for (const [sym, name] of Object.entries(r)) {
-        if (typeof name === "string" && name.trim()) out[sym] = name.trim();
+      for (const [sym, m] of Object.entries(r)) {
+        const name = typeof m?.name === "string" && m.name.trim() ? m.name.trim() : null;
+        const rawSector = typeof m?.sector === "string" && m.sector.trim() ? m.sector.trim() : null;
+        const sector = normalizeSector(rawSector);
+        if (name || sector) out[sym] = { name, sector };
       }
     }
     return out;

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { normalizeRisk, riskProfile, RISK_PROFILES } from "./risk.js";
 import { blend } from "./analyst/blender.js";
 import { sectorRanks } from "./scanner/factors.js";
+import { normalizeSector } from "./scanner/sectors.js";
 
 test("normalizeRisk: coerces unknown/blank to balanced", () => {
   assert.equal(normalizeRisk("aggressive"), "aggressive");
@@ -26,6 +27,18 @@ test("blend: quantWeight override shifts the blended ranking toward quant", () =
   // With quant dominating, A ranks first; with fundamentals dominating, B does.
   assert.equal(quantHeavy[0].ticker, "A");
   assert.equal(fundHeavy[0].ticker, "B");
+});
+
+test("normalizeSector: maps yfinance labels to GICS, passes through the rest", () => {
+  assert.equal(normalizeSector("Technology"), "Information Technology");
+  assert.equal(normalizeSector("Healthcare"), "Health Care");
+  assert.equal(normalizeSector("Financial Services"), "Financials");
+  assert.equal(normalizeSector("Consumer Cyclical"), "Consumer Discretionary");
+  assert.equal(normalizeSector("Basic Materials"), "Materials");
+  // Already-GICS or unknown → unchanged; empty → null.
+  assert.equal(normalizeSector("Energy"), "Energy");
+  assert.equal(normalizeSector("Information Technology"), "Information Technology");
+  assert.equal(normalizeSector(null), null);
 });
 
 test("sectorRanks: ranks within sector by composite, ignores unsectored rows", () => {
