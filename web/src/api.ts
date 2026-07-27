@@ -195,6 +195,9 @@ export type WatchSignal = {
   lastLabel: string | null;
   lastCheckedAt: string | null;
   notifiedAt: string | null;
+  name: string | null;
+  price: number | null;
+  changePct: number | null;
 };
 export async function getWatchSignals(): Promise<WatchSignal[]> {
   return (await jsonOrThrow(await fetch("/api/watchlist/signals"))).data;

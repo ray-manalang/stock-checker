@@ -559,7 +559,13 @@ app.put("/api/settings", (req, res) => {
 // ---------- watchlist buy-signals (Phase 2.2) ----------
 // Per-ticker last verdict + notification state for the "Watching to buy" panel.
 app.get("/api/watchlist/signals", (_req, res) =>
-  res.json({ data: listWatchlistVerdictState() }),
+  res.json({
+    data: listWatchlistVerdictState().map((r) => ({
+      ...r,
+      name: resolveName(r.ticker),
+      ...priceChangeOf(getCachedSeries(r.ticker)),
+    })),
+  }),
 );
 
 // Run the daily watchlist scan now (instead of waiting for the cron).

@@ -1160,9 +1160,18 @@ body:has(.tape) .page {
 }
 .watch-row:first-of-type { border-top: none; padding-top: 4px; }
 .watch-row:hover { color: var(--text); }
+.w-id { flex: 1; min-width: 0; overflow: hidden; }
 .w-tk { font-size: 15px; font-weight: 700; }
-.w-name { font-weight: 400; color: var(--text-3); font-size: 12.5px; margin-left: 6px; }
-.w-signal { text-align: right; }
+.w-name {
+  font-weight: 400; color: var(--text-3); font-size: 12.5px; margin-left: 6px;
+  white-space: nowrap;
+}
+.w-px-wrap { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.w-px { font-size: 14px; font-weight: 600; }
+.w-chg { font-size: 12px; margin-left: 6px; }
+.w-chg.up { color: var(--up); }
+.w-chg.down { color: var(--down); }
+.w-signal { text-align: right; flex-shrink: 0; }
 .buy-badge {
   display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700;
   color: var(--up); background: var(--up-bg); border-radius: 999px; padding: 6px 12px;

@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { getWatchSignals, type WatchSignal } from "./api";
+import { useLivePrices } from "./livePrices";
 import { useCollapsed } from "./lib/useCollapsed";
+
+const money = (n: number) => "$" + n.toFixed(2);
 
 function agoLabel(iso?: string | null): string {
   if (!iso) return "";
@@ -19,6 +22,7 @@ export function WatchingToBuy({ onOpen }: { onOpen: (ticker: string) => void }) 
   const [signals, setSignals] = useState<WatchSignal[]>([]);
   const [ready, setReady] = useState(false);
   const [collapsed, toggle] = useCollapsed("watchingCollapsed");
+  const live = useLivePrices(signals.map((s) => s.ticker));
 
   useEffect(() => {
     let live = true;
@@ -54,6 +58,9 @@ export function WatchingToBuy({ onOpen }: { onOpen: (ticker: string) => void }) 
       </div>
       {signals.map((s) => {
         const isBuy = s.lastVerdict === "BUY";
+        const price = live[s.ticker]?.price ?? s.price;
+        const changePct = live[s.ticker]?.changePct ?? s.changePct;
+        const up = (changePct ?? 0) >= 0;
         return (
           <div
             key={s.ticker}
@@ -63,7 +70,21 @@ export function WatchingToBuy({ onOpen }: { onOpen: (ticker: string) => void }) 
             tabIndex={0}
             onKeyDown={(e) => e.key === "Enter" && onOpen(s.ticker)}
           >
-            <div className="w-tk">{s.ticker}</div>
+            <div className="w-id">
+              <span className="w-tk">{s.ticker}</span>
+              {s.name && <span className="w-name">{s.name}</span>}
+            </div>
+            {price != null && (
+              <div className="w-px-wrap">
+                <span className="w-px">{money(price)}</span>
+                {changePct != null && (
+                  <span className={`w-chg ${up ? "up" : "down"}`}>
+                    {up ? "+" : "−"}
+                    {Math.abs(changePct).toFixed(2)}%
+                  </span>
+                )}
+              </div>
+            )}
             <div className="w-signal">
               {isBuy ? (
                 <>

@@ -58,22 +58,22 @@ export function BacktestCard() {
         <>
           <div className="insight-divider" />
           {loading ? (
-            <div className="insight-foot" style={{ padding: "6px 0" }}>
+            <div className="insight-foot" style={{ padding: "6px 18px" }}>
               <span className="spinner" style={{ width: 13, height: 13 }} /> Grading history…
             </div>
           ) : !data ? (
             <div className="insight-foot">Couldn't load the report.</div>
           ) : !data.ready ? (
-            <div className="insight-foot" style={{ padding: "6px 0" }}>
+            <div className="insight-foot" style={{ padding: "6px 18px" }}>
               {data.logged === 0
                 ? "No verdicts logged yet — this fills in as you check stocks over the coming weeks."
                 : `${data.logged} verdict${data.logged === 1 ? "" : "s"} logged, but none are 90 days old yet. Check back once history accrues.`}
             </div>
           ) : (
-            <>
+            <div style={{ padding: "10px 18px 16px" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
                 <span style={{ fontSize: 32, fontWeight: 800 }}>{data.overall}%</span>
-                <span className="insight-foot" style={{ margin: 0 }}>
+                <span className="insight-foot" style={{ margin: 0, padding: 0 }}>
                   correct direction · {data.graded} graded of {data.logged} logged
                 </span>
               </div>
@@ -92,7 +92,7 @@ export function BacktestCard() {
                   );
                 })}
               </div>
-            </>
+            </div>
           )}
         </>
       )}
