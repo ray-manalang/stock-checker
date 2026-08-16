@@ -817,9 +817,13 @@ body:has(.tape) .page {
   font-size: 18px;
   font-weight: 700;
 }
-.insight-head .subtitle {
+.subtitle {
   color: var(--text-2);
   font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+.insight-head .subtitle {
   margin-top: 3px;
 }
 /* Collapsible card header: title + chevron acting as one toggle button. */
@@ -1444,7 +1448,11 @@ body:has(.tape) .page {
   margin-bottom: 4px;
 }
 .profile-card {
-  padding: 18px 20px 20px;
+  padding: 16px 18px 18px;
+}
+.profile-card > h3 {
+  font-size: 18px;
+  font-weight: 700;
 }
 .profile-form {
   display: flex;
@@ -1493,11 +1501,14 @@ body:has(.tape) .page {
   flex-direction: column;
   gap: 16px;
 }
+.guide-page .insight-card {
+  margin-bottom: 0;
+  padding: 16px 18px 18px;
+}
 .guide-toc {
   display: flex;
   flex-wrap: wrap;
   gap: 10px 16px;
-  padding: 14px 18px;
 }
 .guide-toc a {
   color: var(--text-2);
@@ -1509,23 +1520,34 @@ body:has(.tape) .page {
   text-decoration: underline;
 }
 .guide-section h3 {
+  font-size: 18px;
+  font-weight: 700;
   margin-bottom: 8px;
 }
 .guide-section p,
 .guide-section li {
   color: var(--text-2);
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.guide-section p + p,
+.guide-section p + ul,
+.guide-section ul + p {
+  margin-top: 10px;
+}
+.guide-section strong {
+  color: var(--text);
+  font-weight: 700;
 }
 .guide-section ul {
-  margin: 10px 0 0;
+  margin: 0;
   padding-left: 1.2em;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 .guide-section code {
-  font-size: 0.92em;
+  font-size: inherit;
   color: var(--text);
 }
 .guide-budget {
@@ -1535,15 +1557,18 @@ body:has(.tape) .page {
   background: var(--surface-2);
   border: 1px solid var(--hairline-soft);
 }
+.guide-budget p {
+  margin: 0;
+}
 .guide-budget-ok {
   color: var(--up);
   margin-top: 8px;
-  font-size: 14px;
+  font-size: 13px;
 }
 .guide-budget-hit {
   color: var(--warn, #f5a623);
   margin-top: 8px;
-  font-size: 14px;
+  font-size: 13px;
 }
 .guide-tip-row {
   display: flex;
@@ -1559,7 +1584,7 @@ body:has(.tape) .page {
   background: #f0b429;
   color: #1a1200;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   padding: 10px 16px;
   border-radius: 12px;
   text-decoration: none;
@@ -1596,7 +1621,7 @@ body:has(.tape) .page {
   background: color-mix(in srgb, var(--warn, #f5a623) 12%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--warn, #f5a623) 35%, transparent);
   color: var(--text-2);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
