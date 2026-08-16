@@ -309,11 +309,16 @@ export default function App({ user, onLogout, onUser }: AppProps) {
         </p>
       )}
 
-      {view === "holdings" && <HoldingsPage onBack={() => setView("main")} />}
       {view === "profile" && (
         <ProfilePage user={user} onUser={onUser} onDeleted={onLogout} />
       )}
       {view === "guide" && <GuidePage usage={usage} />}
+
+      {/* Holdings stays mounted (like Home/Research) so the portfolio + live prices
+          aren't discarded when you leave the tab. */}
+      <div style={{ display: view === "holdings" ? undefined : "none" }}>
+        <HoldingsPage onBack={() => setView("main")} />
+      </div>
 
       {/* Research — the ticker check tool (search, recents, watchlist, answer) */}
       <div className="check-col" style={{ display: view === "research" ? undefined : "none" }}>

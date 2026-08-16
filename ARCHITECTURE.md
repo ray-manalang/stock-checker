@@ -570,11 +570,9 @@ still flips** — the status change is the in-app signal. `ALERT_FROM` defaults 
 switches between three nav tabs — **Home**, **Research**, **Holdings** — plus a Hide $
 toggle.
 
-**Mounting is not uniform.** Home and Research are both mounted and toggled with
-`display:none`, so they keep polling in the background. **Holdings is conditionally
-mounted** (`{view === "holdings" && <HoldingsPage …/>}`) — leaving it unmounts the page,
-drops its live-price subscriptions, and discards loaded portfolio state; returning
-re-fetches from scratch.
+**Mounting is not uniform.** Home, Research, and Holdings are mounted and toggled with
+`display:none`, so they keep polling / portfolio state in the background. **Profile** and
+**Guide** are conditionally mounted — leaving them unmounts and discards local form state.
 
 **Research view** (`App.tsx`) — the ticker check tool and everything watchlist-derived
 

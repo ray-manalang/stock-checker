@@ -86,8 +86,9 @@ container runs UTC. Macro and scanner also run on boot when their tables are emp
 (production/Docker), else API-only with Vite proxying in dev. Invite-only session auth;
 personal data is per-user. Cloudflare Access may sit in front on the public hostname.
 
-**Web** (`web/`): nav in `App.tsx` — Home and Research stay mounted (`display:none` so they
-keep polling); **Holdings**, **Profile**, and **Guide** are conditionally mounted.
+**Web** (`web/`): nav in `App.tsx` — Home, Research, and Holdings stay mounted
+(`display:none` so they keep polling / portfolio state); **Profile** and **Guide** are
+conditionally mounted.
 **Home** (`main`): holdings teaser + `ProView.tsx` (Market conditions/macro + Top-ranked/scanner + Market
 videos). **Research** owns everything ticker/watchlist: the check tool (search, recents,
 watchlist), the answer card, then the watchlist-driven cards — `WatchingToBuy.tsx`,
