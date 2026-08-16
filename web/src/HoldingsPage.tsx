@@ -205,32 +205,29 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
 
   return (
     <>
-      <div
-        className="page-head"
-        style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <button className="linklike" onClick={onBack} style={{ marginBottom: 8 }}>
+      <div className="page-head holdings-head">
+        <div className="holdings-head-top">
+          <button className="linklike" onClick={onBack}>
             ‹ Back
           </button>
-          <h2 style={{ margin: 0, fontSize: 24 }}>Holdings</h2>
-          <div className="insight-foot" style={{ marginTop: 4, padding: 0, textAlign: "left" }}>
-            {portfolio?.sources?.length
-              ? `Rolled up across ${portfolio.sources.join(" + ")} · as of ${asOfLabel(portfolio.asOf)}`
-              : "Import a positions CSV to get started."}
-          </div>
-          <p className="subtitle" style={{ marginTop: 8 }}>
-            Visible only to you. Other users and the admin cannot see your portfolio.
-            Share counts and cost basis are encrypted at rest.
-          </p>
+          <button
+            className="btn-ghost btn-sm"
+            onClick={() => setImporting((v) => !v)}
+            style={{ whiteSpace: "nowrap", flexShrink: 0 }}
+          >
+            ↻ Import positions
+          </button>
         </div>
-        <button
-          className="btn-ghost btn-sm"
-          onClick={() => setImporting((v) => !v)}
-          style={{ whiteSpace: "nowrap", flexShrink: 0 }}
-        >
-          ↻ Import positions
-        </button>
+        <h2 className="holdings-title">Holdings</h2>
+        <div className="holdings-meta">
+          {portfolio?.sources?.length
+            ? `Rolled up across ${portfolio.sources.join(" + ")} · as of ${asOfLabel(portfolio.asOf)}`
+            : "Import a positions CSV to get started."}
+        </div>
+        <p className="subtitle holdings-privacy">
+          Visible only to you. Other users and the admin cannot see your portfolio.
+          Share counts and cost basis are encrypted at rest.
+        </p>
       </div>
 
       {importing && (

@@ -1327,6 +1327,39 @@ body:has(.tape) .page {
 .sector-val { color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sector-row.active .meter-fill { background: var(--accent); }
 
+/* Holdings page header: Back/Import on one row; meta + privacy use full width. */
+.holdings-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 4px;
+}
+.holdings-head-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.holdings-title {
+  margin: 0;
+  font-size: 24px;
+}
+.holdings-meta {
+  margin-top: 4px;
+  padding: 0;
+  text-align: left;
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.45;
+  width: 100%;
+}
+.holdings-privacy {
+  margin-top: 8px;
+  width: 100%;
+  max-width: none;
+}
+
 /* Holdings filter bar. */
 .holdings-filter {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
