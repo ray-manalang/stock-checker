@@ -75,7 +75,7 @@ on Profile (when the server has email configured).
 **Track record:** how past verdicts scored, at the bottom of Research.
 
 Tap ⓘ for glossary definitions. Recents reopen a prior check from cache when
-possible so you don’t burn a new Claude call.
+possible so you don’t burn a new Claude call. Tap × on a recent chip to remove it.
 
 ---
 

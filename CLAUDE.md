@@ -121,10 +121,10 @@ serve old assets after a redeploy.
 - Client persistence is a handful of localStorage keys: `changeMode`, `blurAmounts`
   (Hide $), and per-card collapse flags (`macroCollapsed`, `scannerCollapsed`,
   `sectorAllocCollapsed`, `alertsCollapsed`, `holdingsTeaserCollapsed`, `watchingCollapsed`,
-  `trackRecordCollapsed`). Only three go through `lib/useCollapsed.ts` — `ProView`,
-  `AlertsPanel`, and `HoldingsPage` hand-roll the same logic inline, so editing the hook
-  does **not** change all seven. Everything else — including risk tolerance (the `settings`
-  table) — is server-side SQLite.
+  `trackRecordCollapsed`, `disagreementsCollapsed`). Only three go through
+  `lib/useCollapsed.ts` — `ProView`, `AlertsPanel`, and `HoldingsPage` hand-roll the same
+  logic inline, so editing the hook does **not** change all of them. Everything else —
+  including risk tolerance (the `settings` table) — is server-side SQLite.
 - `POST /api/alerts/check` and `POST /api/watchlist/signals/check` call their workers
   directly, skipping the scheduler's concurrency guard. Route new manual triggers through
   the guarded `run*Job()` wrappers instead.

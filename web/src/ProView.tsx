@@ -153,6 +153,9 @@ export function ProView({
   const [macroCollapsed, setMacroCollapsed] = useState(
     () => localStorage.getItem("macroCollapsed") === "1",
   );
+  const [disagreementsCollapsed, setDisagreementsCollapsed] = useState(
+    () => localStorage.getItem("disagreementsCollapsed") === "1",
+  );
   const liveRef = useRef(true);
 
   const toggleCollapsed = () =>
@@ -165,6 +168,12 @@ export function ProView({
     setMacroCollapsed((c) => {
       const next = !c;
       localStorage.setItem("macroCollapsed", next ? "1" : "0");
+      return next;
+    });
+  const toggleDisagreementsCollapsed = () =>
+    setDisagreementsCollapsed((c) => {
+      const next = !c;
+      localStorage.setItem("disagreementsCollapsed", next ? "1" : "0");
       return next;
     });
 
@@ -404,21 +413,32 @@ export function ProView({
             </div>
             {(upgrades.length > 0 || downgrades.length > 0) && (
               <div style={{ padding: "0 18px 14px" }}>
-                <div
-                  className="subtitle"
-                  style={{ marginBottom: 8, color: "var(--text-2)" }}
+                <button
+                  className="collapse-btn"
+                  onClick={toggleDisagreementsCollapsed}
+                  aria-expanded={!disagreementsCollapsed}
+                  title={disagreementsCollapsed ? "Expand" : "Collapse"}
+                  style={{ marginBottom: disagreementsCollapsed ? 0 : 8, width: "100%" }}
                 >
-                  Quant vs analyst disagreements (rank shift ≥ 3){" "}
-                  <InfoTip
-                    title={GLOSSARY.disagreements.title}
-                    text={GLOSSARY.disagreements.text}
-                    label="quant vs analyst disagreements"
-                  />
-                </div>
-                <div style={{ display: "flex", gap: 20, flexWrap: "wrap", fontSize: 13 }}>
-                  <Disagreement rows={upgrades} tone="up" arrow="▲" empty="No upgrades" />
-                  <Disagreement rows={downgrades} tone="down" arrow="▼" empty="No downgrades" />
-                </div>
+                  <span className="chev">{disagreementsCollapsed ? "▸" : "▾"}</span>
+                  <div className="subtitle" style={{ color: "var(--text-2)" }}>
+                    Quant vs analyst disagreements (rank shift ≥ 3){" "}
+                    <InfoTip
+                      title={GLOSSARY.disagreements.title}
+                      text={GLOSSARY.disagreements.text}
+                      label="quant vs analyst disagreements"
+                    />
+                    <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
+                      {upgrades.length}▲ · {downgrades.length}▼
+                    </span>
+                  </div>
+                </button>
+                {!disagreementsCollapsed && (
+                  <div style={{ display: "flex", gap: 20, flexWrap: "wrap", fontSize: 13 }}>
+                    <Disagreement rows={upgrades} tone="up" arrow="▲" empty="No upgrades" />
+                    <Disagreement rows={downgrades} tone="down" arrow="▼" empty="No downgrades" />
+                  </div>
+                )}
               </div>
             )}
             <div className="insight-divider" />

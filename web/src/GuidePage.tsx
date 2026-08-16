@@ -141,7 +141,8 @@ export function GuidePage({ usage }: Props) {
         </p>
         <p>
           Tap ⓘ anywhere for plain-language definitions. Recents reopen a prior check from
-          cache when possible so you don’t burn a new Claude call.
+          cache when possible so you don’t burn a new Claude call. Tap × on a recent chip to
+          remove it from the list.
         </p>
       </section>
 

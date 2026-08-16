@@ -175,6 +175,16 @@ export async function getRecentChecks(): Promise<RecentCheck[]> {
   return (await jsonOrThrow(await apiFetch("/api/checks"))).data;
 }
 
+export async function removeRecentCheck(ticker: string): Promise<RecentCheck[]> {
+  return (
+    await jsonOrThrow(
+      await apiFetch(`/api/checks/${encodeURIComponent(ticker.toUpperCase())}`, {
+        method: "DELETE",
+      }),
+    )
+  ).data;
+}
+
 export type Usage = {
   llm: boolean;
   calls: number;

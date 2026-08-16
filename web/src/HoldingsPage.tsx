@@ -209,7 +209,7 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
         className="page-head"
         style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}
       >
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <button className="linklike" onClick={onBack} style={{ marginBottom: 8 }}>
             ‹ Back
           </button>
@@ -219,7 +219,7 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
               ? `Rolled up across ${portfolio.sources.join(" + ")} · as of ${asOfLabel(portfolio.asOf)}`
               : "Import a positions CSV to get started."}
           </div>
-          <p className="subtitle" style={{ marginTop: 8, maxWidth: 520 }}>
+          <p className="subtitle" style={{ marginTop: 8 }}>
             Visible only to you. Other users and the admin cannot see your portfolio.
             Share counts and cost basis are encrypted at rest.
           </p>

@@ -608,6 +608,13 @@ export function recentChecks(userId, limit = 12) {
     }));
 }
 
+export function deleteRecentCheck(userId, ticker) {
+  db()
+    .prepare(`DELETE FROM recent_checks WHERE user_id = ? AND ticker = ?`)
+    .run(userId, ticker);
+  return recentChecks(userId);
+}
+
 // ---------- LLM usage ----------
 export function recordUsage({ kind, model, inputTokens, outputTokens, cost, userId = null }) {
   db()

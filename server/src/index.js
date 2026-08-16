@@ -25,6 +25,7 @@ import {
   freshSeriesMap,
   recordCheck,
   recentChecks,
+  deleteRecentCheck,
   getAnalystDetail,
   logVerdict,
   getUserSetting,
@@ -295,6 +296,14 @@ app.get("/api/usage", (req, res) => {
 // Persisted history of checked stocks (survives reloads). Revisiting one
 // re-opens instantly from the quarter cache — no new Claude call.
 app.get("/api/checks", (req, res) => res.json({ data: recentChecks(req.user.id) }));
+app.delete("/api/checks/:sym", (req, res) => {
+  const sym = String(req.params.sym || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\./g, "-");
+  if (!sym) return res.status(400).json({ error: "ticker is required" });
+  res.json({ ok: true, data: deleteRecentCheck(req.user.id, sym) });
+});
 
 // Instant Check: live price + technicals + deterministic verdict, with a
 // cached/live Claude deep-dive when available. `?deep=0` skips the LLM;

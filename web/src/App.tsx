@@ -7,6 +7,7 @@ import {
   createAlert,
   getUsage,
   getRecentChecks,
+  removeRecentCheck,
   getSettings,
   updateSettings,
   getHoldings,
@@ -179,6 +180,14 @@ export default function App({ user, onLogout, onUser }: AppProps) {
     try {
       const next = await addToWatchlist(symbol);
       setWatchlist(next.map((x) => x.ticker));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function removeRecent(sym: string) {
+    try {
+      setRecent(await removeRecentCheck(sym));
     } catch {
       /* ignore */
     }
@@ -379,25 +388,42 @@ export default function App({ user, onLogout, onUser }: AppProps) {
             Recently checked:
           </span>
           {recent.map((r) => (
-            <button
-              key={r.ticker}
-              className="chip"
-              onClick={() => run(r.ticker)}
-              disabled={loading}
-              title={r.verdictLabel ?? ""}
-              style={{ display: "inline-flex", alignItems: "center", gap: 7 }}
-            >
-              <span
+            <span key={r.ticker} className="chip" style={{ display: "inline-flex", gap: 8 }}>
+              <button
+                onClick={() => run(r.ticker)}
+                disabled={loading}
+                title={r.verdictLabel ?? ""}
                 style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  background: `var(--${r.verdictTone ?? "neutral"}, var(--text-3))`,
-                  display: "inline-block",
+                  background: "none",
+                  border: "none",
+                  color: "inherit",
+                  padding: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 7,
+                  cursor: loading ? "default" : "pointer",
                 }}
-              />
-              {r.ticker}
-            </button>
+              >
+                <span
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    background: `var(--${r.verdictTone ?? "neutral"}, var(--text-3))`,
+                    display: "inline-block",
+                  }}
+                />
+                {r.ticker}
+              </button>
+              <button
+                onClick={() => removeRecent(r.ticker)}
+                aria-label={`Remove ${r.ticker} from recently checked`}
+                title="Remove from recently checked"
+                style={{ background: "none", border: "none", color: "var(--text-3)", padding: 0 }}
+              >
+                ×
+              </button>
+            </span>
           ))}
         </div>
       )}
