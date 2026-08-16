@@ -1413,13 +1413,40 @@ body:has(.tape) .page {
 .invite-banner {
   margin: 0 auto 12px;
   max-width: var(--maxw);
-  padding: 10px 14px;
+  padding: 16px 18px;
   font-size: 13px;
   color: var(--text-2);
   background: var(--surface);
   border-radius: 12px;
   border: 1px solid var(--hairline-soft);
   word-break: break-all;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.invite-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.invite-link:hover {
+  color: var(--text);
+}
+.invite-copy-btn {
+  flex-shrink: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline-soft);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.invite-copy-btn:hover {
+  border-color: var(--hairline);
 }
 .account-card { margin-top: 18px; padding: 16px 18px; }
 .account-row { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
