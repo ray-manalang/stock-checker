@@ -855,6 +855,10 @@ export function updateUserProfile(userId, { alertEmail } = {}) {
   return findUserById(userId);
 }
 
+export function setUserPasswordHash(userId, passwordHash) {
+  db().prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).run(passwordHash, userId);
+}
+
 export function setUserHoldingsKeys(userId, { dekWrapped, kdfSalt }) {
   db()
     .prepare(
@@ -896,6 +900,12 @@ export function getSession(id) {
 
 export function touchSession(id, expiresAt) {
   db().prepare(`UPDATE sessions SET expires_at = ? WHERE id = ?`).run(expiresAt, id);
+}
+
+export function setSessionHoldingsDekBlob(id, holdingsDekBlob) {
+  db()
+    .prepare(`UPDATE sessions SET holdings_dek_blob = ? WHERE id = ?`)
+    .run(holdingsDekBlob, id);
 }
 
 export function deleteSession(id) {

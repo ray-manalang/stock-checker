@@ -69,6 +69,7 @@ import {
   SESSION_COOKIE,
   updateUserProfile,
   meFromReq,
+  changePassword,
 } from "./auth.js";
 import { rateLimit, clientIp } from "./rateLimit.js";
 
@@ -694,6 +695,20 @@ app.put("/api/settings", (req, res) => {
     riskTolerance: normalizeRisk(getUserSetting(req.user.id, "riskTolerance", DEFAULT_RISK)),
     alertEmail,
   });
+});
+
+app.put("/api/account/password", (req, res) => {
+  const result = changePassword(
+    req.user.id,
+    req.sessionId,
+    {
+      currentPassword: req.body?.currentPassword,
+      newPassword: req.body?.newPassword,
+    },
+    req.holdingsDek,
+  );
+  if (result.error) return res.status(result.status || 400).json({ error: result.error });
+  res.json({ ok: true });
 });
 
 // ---------- watchlist buy-signals (Phase 2.2) ----------

@@ -247,6 +247,15 @@ export async function updateSettings(
   );
 }
 
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await jsonOrThrow(
+    await apiFetch("/api/account/password", {
+      method: "PUT",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+  );
+}
+
 export type WatchSignal = {
   ticker: string;
   lastVerdict: string | null;

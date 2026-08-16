@@ -1422,3 +1422,54 @@ body:has(.tape) .page {
   padding: 10px 12px;
   font-size: 15px;
 }
+
+/* Profile page */
+.profile-page {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 8px 0 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.profile-hero h2 {
+  font-size: 28px;
+  margin-bottom: 4px;
+}
+.profile-card {
+  padding: 18px 20px 20px;
+}
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.profile-dl {
+  margin: 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.profile-dl div {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--hairline-soft);
+  padding-bottom: 8px;
+}
+.profile-dl dt {
+  color: var(--text-3);
+  font-size: 13px;
+}
+.profile-dl dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}

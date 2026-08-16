@@ -26,6 +26,8 @@ import {
   getUserHoldingsKeys,
   listUsers,
   updateUserProfile,
+  setUserPasswordHash,
+  setSessionHoldingsDekBlob,
 } from "./db.js";
 import { putSessionDek, getSessionDek, clearSessionDek, touchSessionDek } from "./sessionVault.js";
 import { encryptExistingHoldingsForUser } from "./holdingsCrypto.js";
@@ -250,6 +252,54 @@ export function createInviteFor(adminUserId, { days = 14 } = {}) {
   const base = (process.env.APP_BASE_URL || "").replace(/\/$/, "");
   const url = base ? `${base}/?invite=${encodeURIComponent(token)}` : `/?invite=${encodeURIComponent(token)}`;
   return { token, expiresAt, url };
+}
+
+/**
+ * Change password and re-wrap the holdings DEK under the new password.
+ * Requires the current password. Uses session DEK when available.
+ */
+export function changePassword(userId, sessionId, { currentPassword, newPassword }, sessionDek = null) {
+  const user = findUserById(userId);
+  if (!user) return { error: "Sign in required", status: 401 };
+  if (!verifyPassword(currentPassword, user.passwordHash)) {
+    return { error: "Current password is incorrect", status: 400 };
+  }
+  if (!newPassword || String(newPassword).length < 8) {
+    return { error: "New password must be at least 8 characters", status: 400 };
+  }
+  if (currentPassword === newPassword) {
+    return { error: "New password must be different", status: 400 };
+  }
+
+  let dek = sessionDek ? Buffer.from(sessionDek) : null;
+  if (!dek) {
+    const keys = getUserHoldingsKeys(userId);
+    if (keys?.dekWrapped && keys?.kdfSalt) {
+      try {
+        const kek = deriveKek(currentPassword, Buffer.from(keys.kdfSalt, "base64"));
+        dek = unwrapDek(keys.dekWrapped, kek);
+      } catch {
+        return { error: "Couldn’t unlock holdings with current password — sign out and back in", status: 400 };
+      }
+    } else {
+      dek = generateDek();
+    }
+  }
+
+  const salt = newSalt();
+  const kek = deriveKek(newPassword, salt);
+  setUserHoldingsKeys(userId, {
+    dekWrapped: wrapDek(dek, kek),
+    kdfSalt: salt.toString("base64"),
+  });
+  setUserPasswordHash(userId, hashPassword(newPassword));
+
+  if (sessionId) {
+    putSessionDek(sessionId, dek, Date.now() + SESSION_MS);
+    setSessionHoldingsDekBlob(sessionId, sealDekForSession(dek));
+  }
+
+  return { ok: true, user: publicUser(findUserById(userId)) };
 }
 
 export function requireAuth(req, res, next) {

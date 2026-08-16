@@ -29,6 +29,7 @@ import { WatchingToBuy } from "./WatchingToBuy";
 import { AlertsPanel } from "./AlertsPanel";
 import { BacktestCard } from "./BacktestCard";
 import { HoldingsPage } from "./HoldingsPage";
+import { ProfilePage } from "./ProfilePage";
 import { GLOSSARY } from "./lib/glossary";
 import { money, num, pct, pointStr, type ChangeMode } from "./lib/format";
 import { useCollapsed } from "./lib/useCollapsed";
@@ -37,7 +38,7 @@ function toneClass(t: Tone): string {
   return t;
 }
 
-type View = "main" | "research" | "holdings";
+type View = "main" | "research" | "holdings" | "profile";
 
 type AppProps = {
   user: AuthUser;
@@ -49,8 +50,6 @@ export default function App({ user, onLogout, onUser }: AppProps) {
   const isAdmin = user.role === "admin";
   const [view, setView] = useState<View>("main");
   const [risk, setRisk] = useState<RiskTolerance>("balanced");
-  const [alertEmail, setAlertEmail] = useState(user.alertEmail ?? "");
-  const [alertEmailStatus, setAlertEmailStatus] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [blur, setBlur] = useState(() => localStorage.getItem("blurAmounts") === "1");
   const [ticker, setTicker] = useState("");
@@ -85,7 +84,6 @@ export default function App({ user, onLogout, onUser }: AppProps) {
     getSettings()
       .then((s) => {
         setRisk(s.riskTolerance);
-        if (s.alertEmail != null) setAlertEmail(s.alertEmail);
       })
       .catch(() => {});
   }, []);
@@ -108,20 +106,6 @@ export default function App({ user, onLogout, onUser }: AppProps) {
       if (data) run(data.quote.ticker);
     } catch {
       /* ignore */
-    }
-  }
-
-  async function saveAlertEmail() {
-    setAlertEmailStatus(null);
-    try {
-      const s = await updateSettings({ alertEmail: alertEmail.trim() || null });
-      const next = s.alertEmail ?? null;
-      setAlertEmail(next ?? "");
-      onUser({ ...user, alertEmail: next });
-      setAlertEmailStatus("Saved");
-      window.setTimeout(() => setAlertEmailStatus(null), 2500);
-    } catch (err) {
-      setAlertEmailStatus(err instanceof Error ? err.message : "Couldn’t save");
     }
   }
 
@@ -245,6 +229,12 @@ export default function App({ user, onLogout, onUser }: AppProps) {
             Holdings
           </button>
           <button
+            className={`nav-link${view === "profile" ? " active" : ""}`}
+            onClick={() => setView("profile")}
+          >
+            Profile
+          </button>
+          <button
             className="nav-link"
             onClick={toggleBlur}
             title={blur ? "Show dollar amounts" : "Hide dollar amounts"}
@@ -256,9 +246,14 @@ export default function App({ user, onLogout, onUser }: AppProps) {
               Invite
             </button>
           )}
-          <span className="nav-user" title={user.username}>
+          <button
+            className="nav-link"
+            type="button"
+            onClick={() => setView("profile")}
+            title={user.username}
+          >
             {user.username}
-          </span>
+          </button>
           <button className="nav-link" type="button" onClick={handleLogout}>
             Sign out
           </button>
@@ -271,6 +266,7 @@ export default function App({ user, onLogout, onUser }: AppProps) {
       )}
 
       {view === "holdings" && <HoldingsPage onBack={() => setView("main")} />}
+      {view === "profile" && <ProfilePage user={user} onUser={onUser} />}
 
       {/* Research — the ticker check tool (search, recents, watchlist, answer) */}
       <div className="check-col" style={{ display: view === "research" ? undefined : "none" }}>
@@ -451,39 +447,6 @@ export default function App({ user, onLogout, onUser }: AppProps) {
         onRiskChange={changeRisk}
         canRefresh={isAdmin}
       />
-      <div className="account-card insight-card">
-        <h3>Your account</h3>
-        <p className="subtitle">Alert emails go here when a buy-zone alert fires.</p>
-        <div className="account-row">
-          <input
-            id="alert-email"
-            type="email"
-            value={alertEmail}
-            onChange={(e) => {
-              setAlertEmail(e.target.value);
-              setAlertEmailStatus(null);
-            }}
-            placeholder="you@example.com"
-            aria-label="Alert email"
-          />
-          <button type="button" className="pill-btn" onClick={saveAlertEmail}>
-            Save
-          </button>
-        </div>
-        {alertEmailStatus && (
-          <p
-            className="account-status"
-            style={{
-              margin: "8px 0 0",
-              fontSize: 13,
-              color: alertEmailStatus === "Saved" ? "var(--up)" : "var(--down)",
-            }}
-            role="status"
-          >
-            {alertEmailStatus}
-          </p>
-        )}
-      </div>
       </div>{/* pro-dashboard (home) */}
     </div>
     <TickerTape
