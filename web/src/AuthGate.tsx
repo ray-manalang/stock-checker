@@ -11,6 +11,7 @@ export function AuthGate({ onAuthed }: Props) {
   const [invite, setInvite] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [alertEmail, setAlertEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -33,6 +34,10 @@ export function AuthGate({ onAuthed }: Props) {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (mode === "invite" && password !== confirmPassword) {
+      setError("Passwords don’t match");
+      return;
+    }
     setBusy(true);
     try {
       const user =
@@ -101,6 +106,19 @@ export function AuthGate({ onAuthed }: Props) {
           </label>
           {mode === "invite" && (
             <label className="auth-field">
+              <span>Confirm password</span>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+                required
+                minLength={8}
+              />
+            </label>
+          )}
+          {mode === "invite" && (
+            <label className="auth-field">
               <span>Alert email (optional)</span>
               <input
                 type="email"
@@ -121,6 +139,7 @@ export function AuthGate({ onAuthed }: Props) {
           className="auth-switch"
           onClick={() => {
             setMode((m) => (m === "login" ? "invite" : "login"));
+            setConfirmPassword("");
             setError(null);
           }}
         >
