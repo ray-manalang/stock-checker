@@ -669,9 +669,10 @@ app.delete("/api/alerts/:id", (req, res) => {
 
 // ---------- settings (risk tolerance + alert email) ----------
 app.get("/api/settings", (req, res) => {
+  const profile = updateUserProfile(req.user.id, {});
   res.json({
     riskTolerance: normalizeRisk(getUserSetting(req.user.id, "riskTolerance", DEFAULT_RISK)),
-    alertEmail: req.user.alertEmail ?? null,
+    alertEmail: profile?.alertEmail ?? null,
     riskProfiles: Object.fromEntries(
       Object.entries(RISK_PROFILES).map(([k, v]) => [k, { label: v.label }]),
     ),

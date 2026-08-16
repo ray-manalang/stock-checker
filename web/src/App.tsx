@@ -50,6 +50,7 @@ export default function App({ user, onLogout, onUser }: AppProps) {
   const [view, setView] = useState<View>("main");
   const [risk, setRisk] = useState<RiskTolerance>("balanced");
   const [alertEmail, setAlertEmail] = useState(user.alertEmail ?? "");
+  const [alertEmailStatus, setAlertEmailStatus] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [blur, setBlur] = useState(() => localStorage.getItem("blurAmounts") === "1");
   const [ticker, setTicker] = useState("");
@@ -111,11 +112,16 @@ export default function App({ user, onLogout, onUser }: AppProps) {
   }
 
   async function saveAlertEmail() {
+    setAlertEmailStatus(null);
     try {
-      const s = await updateSettings({ alertEmail });
-      onUser({ ...user, alertEmail: s.alertEmail ?? null });
-    } catch {
-      /* ignore */
+      const s = await updateSettings({ alertEmail: alertEmail.trim() || null });
+      const next = s.alertEmail ?? null;
+      setAlertEmail(next ?? "");
+      onUser({ ...user, alertEmail: next });
+      setAlertEmailStatus("Saved");
+      window.setTimeout(() => setAlertEmailStatus(null), 2500);
+    } catch (err) {
+      setAlertEmailStatus(err instanceof Error ? err.message : "Couldn’t save");
     }
   }
 
@@ -453,7 +459,10 @@ export default function App({ user, onLogout, onUser }: AppProps) {
             id="alert-email"
             type="email"
             value={alertEmail}
-            onChange={(e) => setAlertEmail(e.target.value)}
+            onChange={(e) => {
+              setAlertEmail(e.target.value);
+              setAlertEmailStatus(null);
+            }}
             placeholder="you@example.com"
             aria-label="Alert email"
           />
@@ -461,6 +470,19 @@ export default function App({ user, onLogout, onUser }: AppProps) {
             Save
           </button>
         </div>
+        {alertEmailStatus && (
+          <p
+            className="account-status"
+            style={{
+              margin: "8px 0 0",
+              fontSize: 13,
+              color: alertEmailStatus === "Saved" ? "var(--up)" : "var(--down)",
+            }}
+            role="status"
+          >
+            {alertEmailStatus}
+          </p>
+        )}
       </div>
       </div>{/* pro-dashboard (home) */}
     </div>
