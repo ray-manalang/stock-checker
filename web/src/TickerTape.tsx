@@ -5,10 +5,11 @@ import { useLivePrices } from "./livePrices";
 
 /**
  * Fixed footer ticker-tape — a continuous horizontal marquee of the user's
- * watchlist plus the scanner's current top-ranked names (deduped server-side),
- * each showing symbol · price · daily change. Watchlist names get a ★. A pinned
- * %/$ toggle flips the change display (shared with the analysis card). Stays in
- * view on both Basic and Pro; hidden when there's nothing to show.
+ * watchlist plus the scanner's current top-ranked names (deduped server-side;
+ * recent one-off checks that aren't watched are omitted), each showing
+ * symbol · price · daily change. Watchlist names get a ★. A pinned %/$ toggle
+ * flips the change display (shared with the analysis card). Hidden when there's
+ * nothing to show.
  */
 export function TickerTape({
   watchlist,

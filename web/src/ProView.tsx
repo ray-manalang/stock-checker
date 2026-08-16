@@ -425,7 +425,7 @@ export function ProView({
             className="rows"
             style={{ border: "none", borderRadius: 0, maxHeight: 460, overflowY: "auto" }}
           >
-            {rows.slice(0, 20).map((r) => {
+            {rows.map((r) => {
               const hasDetail = !!r.analyst;
               const open = expanded.has(r.ticker);
               // Prefer the shared live price (keeps this in sync with the tape).

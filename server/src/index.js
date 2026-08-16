@@ -596,7 +596,9 @@ const TAPE_INDEXES = [
 ];
 
 // Ticker-tape feed: market indexes, then this user's watchlist, then the
-// scanner's current top-ranked names (deduped, watchlist wins), each tagged.
+// scanner's current top-ranked names (deduped, watchlist wins). Recently
+// checked names that aren't on the watchlist are omitted so the marquee
+// doesn't re-surface one-off Research lookups.
 app.get("/api/tape", async (req, res) => {
   try {
     // Indexes (pinned first).
@@ -608,16 +610,22 @@ app.get("/api/tape", async (req, res) => {
     }));
 
     const watchTickers = listWatchlist(req.user.id).map((w) => w.ticker);
+    const watchSet = new Set(watchTickers);
     const items = (await watchlistQuotes(watchTickers)).map((q) => ({
       ...q,
       source: "watch",
     }));
     const seen = new Set(watchTickers);
+    const recentOnly = new Set(
+      recentChecks(req.user.id)
+        .map((c) => c.ticker)
+        .filter((t) => t && !watchSet.has(t)),
+    );
 
     const run = latestScanner();
     if (run && run.macroMode !== "DEFENSIVE") {
       for (const r of run.rows.slice(0, 20)) {
-        if (seen.has(r.ticker)) continue;
+        if (seen.has(r.ticker) || recentOnly.has(r.ticker)) continue;
         seen.add(r.ticker);
         items.push({
           ticker: r.ticker,

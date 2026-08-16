@@ -107,7 +107,7 @@ good snapshot in place and the UI labels it stale.
 | POST | `/api/watchlist` | body `{ ticker }` | `{ ok, data }` · 400 if missing |
 | DELETE | `/api/watchlist/:sym` | — | `{ ok, data }` |
 | GET | `/api/watchlist/quotes` | — | `{ data: [{ ticker, name, price, changePct }] }` (6 h price cache) |
-| GET | `/api/tape` | — | `{ data: TapeItem[] }` — indexes, then watchlist, then top-20 scanner |
+| GET | `/api/tape` | — | `{ data: TapeItem[] }` — indexes, watchlist, top-20 scanner (skips recent non-watched checks) |
 | GET | `/api/quotes` | `?symbols=AAPL,MSFT` | `{ data: { SYM: { price, changePct } } }` — 60 s in-process cache |
 | GET | `/api/news/videos` | `?force=1` bypasses cache | `{ data: Video[] }` — merged across sources, newest first; 5-min cache (keyed on the source set). Adds `cached: true` on a cache hit. **The failure branch is effectively dead**: `fetchAllVideos` swallows every per-source error and resolves to `[]`, so nothing throws — a total outage returns `200 { data: [] }`, and neither the documented 502 nor the `stale: true` flag (both in the same `catch`) can ship |
 | GET | `/api/news/sources` | — | `{ data: [{ channelId, label }] }` — configured video sources (defaults to CNBC Television) |
@@ -151,7 +151,8 @@ good snapshot in place and the UI labels it stale.
 
 **`/api/tape` composition** — pinned `^GSPC` ("S&P 500") and `^IXIC` ("Nasdaq") tagged
 `source:"index"`, then watchlist (`"watch"`), then the top 20 scanner rows not already
-present (`"scan"`). Scanner names are omitted entirely when the macro zone is `DEFENSIVE`.
+present and not in recent checks unless watched (`"scan"`). Scanner names are omitted
+entirely when the macro zone is `DEFENSIVE`.
 
 **`/api/news/videos`** reads each configured source's YouTube RSS feed (12 s timeout,
 hand-rolled regex XML parse), merges them newest-first and tags each clip with its source
@@ -601,7 +602,7 @@ toggle.
   **Risk tolerance** segmented control (`RiskControl.tsx` — Conservative / Balanced /
   Aggressive; see [Risk tolerance](#risk-tolerance)), blend summary (candidates / upgrades
   / downgrades / avg blended), a "quant vs analyst disagreements (rank shift ≥ 3)" block,
-  then up to 20 scrollable rows. Each row shows its within-sector rank (*"#3 in
+  then scrollable rows for every current candidate (same count as Candidates). Each row shows its within-sector rank (*"#3 in
   Technology"*). Rows with analyst data expand to show dimension chips, the fundamental
   score, the rank move, and Claude's notes.
 - **Market videos** (`CnbcVideos.tsx`) — a scrollable 4×3 grid of thumbnails with an in-page
