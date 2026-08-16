@@ -258,12 +258,30 @@ function checkDeepAllowed(wantDeep) {
   return true;
 }
 
-// Month-to-date Claude usage + cost — admin ops only.
+const KOFI_URL = (process.env.KOFI_URL || "https://ko-fi.com/ideadog").trim();
+
+function llmBudgetPayload() {
+  const siteToday = usageToday();
+  return {
+    dailyUsd: DAILY_LLM_BUDGET_USD,
+    siteTodayCost: siteToday.cost,
+    deepAllowed: siteToday.cost < DAILY_LLM_BUDGET_USD,
+  };
+}
+
+// Per-user Claude usage + shared daily budget (and tip-jar URL).
 app.get("/api/usage", (req, res) => {
   const payload = {
     llm: llmConfigured(),
     ...usageThisMonth(req.user.id),
     today: usageToday(req.user.id),
+    budget: llmBudgetPayload(),
+    support: {
+      url: KOFI_URL,
+      label: "Chip in for LLM costs",
+      tooltip:
+        "Market Specialist is free for invited friends. Tips help cover Claude usage when the daily budget runs out.",
+    },
   };
   if (req.user.role === "admin") {
     payload.site = {

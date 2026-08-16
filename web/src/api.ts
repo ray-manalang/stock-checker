@@ -183,6 +183,16 @@ export type Usage = {
   outputTokens: number;
   since?: string;
   today?: { calls: number; cost: number; since: string };
+  budget?: {
+    dailyUsd: number;
+    siteTodayCost: number;
+    deepAllowed: boolean;
+  };
+  support?: {
+    url: string;
+    label: string;
+    tooltip: string;
+  };
   site?: {
     calls: number;
     cost: number;

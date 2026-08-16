@@ -8,6 +8,7 @@ import {
   type AuthUser,
   type Usage,
 } from "./api";
+import { SupportButton } from "./components/SupportButton";
 
 type Props = {
   user: AuthUser;
@@ -122,17 +123,27 @@ export function ProfilePage({ user, onUser, onDeleted }: Props) {
         {usage ? (
           <dl className="profile-dl">
             <div>
-              <dt>This month</dt>
+              <dt>This month (you)</dt>
               <dd>
                 ${usage.cost.toFixed(2)} · {usage.calls} {usage.calls === 1 ? "call" : "calls"}
               </dd>
             </div>
             {usage.today && (
               <div>
-                <dt>Today</dt>
+                <dt>Today (you)</dt>
                 <dd>
                   ${Number(usage.today.cost).toFixed(2)} · {usage.today.calls}{" "}
                   {usage.today.calls === 1 ? "call" : "calls"}
+                </dd>
+              </div>
+            )}
+            {usage.budget && (
+              <div>
+                <dt>Daily site budget</dt>
+                <dd>
+                  ${Number(usage.budget.siteTodayCost).toFixed(2)} of $
+                  {usage.budget.dailyUsd.toFixed(2)} (UTC)
+                  {usage.budget.deepAllowed ? "" : " · deep-dives paused"}
                 </dd>
               </div>
             )}
@@ -141,6 +152,9 @@ export function ProfilePage({ user, onUser, onDeleted }: Props) {
                 <dt>Site-wide (admin)</dt>
                 <dd>
                   ${usage.site.cost.toFixed(2)} · {usage.site.calls} calls this month
+                  {usage.site.today
+                    ? ` · $${Number(usage.site.today.cost).toFixed(2)} today`
+                    : ""}
                 </dd>
               </div>
             )}
@@ -150,7 +164,29 @@ export function ProfilePage({ user, onUser, onDeleted }: Props) {
             Usage unavailable.
           </p>
         )}
+        {usage?.budget && !usage.budget.deepAllowed && (
+          <p className="guide-budget-hit" style={{ marginTop: 12 }}>
+            Shared daily Claude budget reached. Checks still work; new deep-dives resume
+            tomorrow (UTC).
+          </p>
+        )}
       </section>
+
+      {usage?.support?.url && (
+        <section className="insight-card profile-card">
+          <h3>Tip jar</h3>
+          <p className="subtitle">
+            Optional — help cover Claude costs. Nothing is gated behind tips.
+          </p>
+          <div className="guide-tip-row" style={{ marginTop: 12 }}>
+            <SupportButton
+              url={usage.support.url}
+              label={usage.support.label}
+              tooltip={usage.support.tooltip}
+            />
+          </div>
+        </section>
+      )}
 
       <section className="insight-card profile-card">
         <h3>Alert email</h3>

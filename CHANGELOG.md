@@ -21,6 +21,8 @@ Friends can share one instance (`https://sc.knr-manalang.net`) with isolated dat
 - Holdings amount encryption at rest (per-user DEK unlocked at sign-in)
 - Rate limits, admin-only refresh/usage, daily Claude spend cap (`DAILY_LLM_BUDGET_USD`)
 - One-shot migration: existing personal rows attach to bootstrap admin (backup first)
+- In-app **Guide** + [`USER-GUIDE.md`](USER-GUIDE.md); daily budget shown on Profile / Research
+- Ko-fi tip jar (`KOFI_URL`) for contributing to LLM costs (AptResume-style outbound link)
 
 ---
 

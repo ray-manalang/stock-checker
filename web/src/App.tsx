@@ -30,6 +30,8 @@ import { AlertsPanel } from "./AlertsPanel";
 import { BacktestCard } from "./BacktestCard";
 import { HoldingsPage } from "./HoldingsPage";
 import { ProfilePage } from "./ProfilePage";
+import { GuidePage } from "./GuidePage";
+import { SupportButton } from "./components/SupportButton";
 import { GLOSSARY } from "./lib/glossary";
 import { money, num, pct, pointStr, type ChangeMode } from "./lib/format";
 import { useCollapsed } from "./lib/useCollapsed";
@@ -38,7 +40,7 @@ function toneClass(t: Tone): string {
   return t;
 }
 
-type View = "main" | "research" | "holdings" | "profile";
+type View = "main" | "research" | "holdings" | "profile" | "guide";
 
 type AppProps = {
   user: AuthUser;
@@ -234,6 +236,12 @@ export default function App({ user, onLogout, onUser }: AppProps) {
             Profile
           </button>
           <button
+            className={`nav-link${view === "guide" ? " active" : ""}`}
+            onClick={() => setView("guide")}
+          >
+            Guide
+          </button>
+          <button
             className="nav-link"
             onClick={toggleBlur}
             title={blur ? "Show dollar amounts" : "Hide dollar amounts"}
@@ -268,9 +276,27 @@ export default function App({ user, onLogout, onUser }: AppProps) {
       {view === "profile" && (
         <ProfilePage user={user} onUser={onUser} onDeleted={onLogout} />
       )}
+      {view === "guide" && <GuidePage usage={usage} />}
 
       {/* Research — the ticker check tool (search, recents, watchlist, answer) */}
       <div className="check-col" style={{ display: view === "research" ? undefined : "none" }}>
+      {usage?.budget && !usage.budget.deepAllowed && (
+        <p className="budget-banner" role="status">
+          Shared daily Claude budget (${usage.budget.dailyUsd.toFixed(2)}) reached — new
+          deep-dives are paused until tomorrow (UTC). Numbers-only checks still work.
+          {usage.support?.url && (
+            <>
+              {" "}
+              <SupportButton
+                url={usage.support.url}
+                label={usage.support.label}
+                tooltip={usage.support.tooltip}
+                className="support-btn-inline"
+              />
+            </>
+          )}
+        </p>
+      )}
       <div className="check-tool">
       <form className="search" onSubmit={onSubmit}>
         <label htmlFor="ticker" className="sr-only">
@@ -433,6 +459,24 @@ export default function App({ user, onLogout, onUser }: AppProps) {
         >
           Claude usage this month: ${usage.cost.toFixed(2)} · {usage.calls}{" "}
           {usage.calls === 1 ? "call" : "calls"}
+          {usage.budget && (
+            <>
+              {" "}
+              · site today ${Number(usage.budget.siteTodayCost).toFixed(2)} / $
+              {usage.budget.dailyUsd.toFixed(2)}
+            </>
+          )}
+          {usage.support?.url && (
+            <>
+              {" · "}
+              <SupportButton
+                url={usage.support.url}
+                label="Tip jar"
+                tooltip={usage.support.tooltip}
+                className="support-btn-link"
+              />
+            </>
+          )}
         </div>
       )}
       </div>{/* check-col (research) */}

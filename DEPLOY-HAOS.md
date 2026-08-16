@@ -33,6 +33,7 @@ One container serves the React UI and Express API on port **3001** inside the co
    | `CORS_ORIGIN` | same hostname, e.g. `https://sc.knr-manalang.net` |
    | `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASS` | **first boot only** — creates the admin and migrates your existing watchlist/holdings/alerts onto that account |
    | `DAILY_LLM_BUDGET_USD` | optional Claude spend cap per UTC day (default `5`) |
+   | `KOFI_URL` | tip jar link for LLM costs (default `https://ko-fi.com/ideadog`) |
    | `HA_BASE_URL` + `HA_TOKEN` | your Home Assistant URL and a long-lived access token — enables a push notification the day a watched ticker first turns into "Good time to buy" |
    | `HA_NOTIFY_SERVICE` | which `notify.<service>` to call, e.g. `mobile_app_your_phone` (default `notify`) |
 

@@ -25,7 +25,9 @@ a maintained *Known limitations* list).
 
 ## What it does
 
-Three nav tabs — **Home**, **Research**, **Holdings** — plus a Hide $ toggle.
+Three nav tabs — **Home**, **Research**, **Holdings** — plus **Profile**, **Guide**, and a Hide $ toggle.
+
+For a friend-facing walkthrough see [USER-GUIDE.md](USER-GUIDE.md) (also under **Guide** in the app).
 
 **Research tab** — one search box and one answer card:
 

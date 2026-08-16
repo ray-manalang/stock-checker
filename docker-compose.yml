@@ -26,6 +26,7 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
       DAILY_LLM_BUDGET_USD: ${DAILY_LLM_BUDGET_USD:-5}
+      KOFI_URL: ${KOFI_URL:-https://ko-fi.com/ideadog}
       PORT: "3001"
       STATIC_DIR: /app/web/dist
       # Persist the SQLite store (watchlist, alerts, cached scores, usage) on a

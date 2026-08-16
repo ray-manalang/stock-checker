@@ -86,18 +86,20 @@ container runs UTC. Macro and scanner also run on boot when their tables are emp
 (production/Docker), else API-only with Vite proxying in dev. Invite-only session auth;
 personal data is per-user. Cloudflare Access may sit in front on the public hostname.
 
-**Web** (`web/`): three nav tabs in `App.tsx`. Home and Research are toggled with
-`display:none` (mounted, so they keep polling); **Holdings is conditionally mounted**, so it
-unmounts and refetches on every visit. **Home** (`main`) is the at-a-glance view:
-holdings teaser + `ProView.tsx` (Market conditions/macro + Top-ranked/scanner + Market
+**Web** (`web/`): nav in `App.tsx` — Home and Research stay mounted (`display:none` so they
+keep polling); **Holdings**, **Profile**, and **Guide** are conditionally mounted.
+**Home** (`main`): holdings teaser + `ProView.tsx` (Market conditions/macro + Top-ranked/scanner + Market
 videos). **Research** owns everything ticker/watchlist: the check tool (search, recents,
 watchlist), the answer card, then the watchlist-driven cards — `WatchingToBuy.tsx`,
 `AlertsPanel.tsx` ("Your alerts"), and `BacktestCard.tsx` ("Track record") at the bottom.
-**Holdings** is `HoldingsPage.tsx`. A `?check=SYM` query param opens Research on that ticker
+**Holdings** is `HoldingsPage.tsx`. Friend-facing docs: `USER-GUIDE.md` + in-app Guide.
+Tip jar is Ko-fi via `KOFI_URL` (outbound link only). Daily Claude cap
+(`DAILY_LLM_BUDGET_USD`) is on `GET /api/usage` as `budget` (Profile / Guide / Research).
+A `?check=SYM` query param opens Research on that ticker
 (HA deep-links). `TickerTape.tsx` is a fixed footer in every view. `livePrices.ts` is a single
 refcounted 60s poller every price on screen subscribes to — add new price displays there
 rather than polling separately. Components in `web/src/components/` (`InfoTip`,
-`PriceChart`, `ClearableInput`, `RiskControl`); design tokens in `web/src/index.css` — the
+`PriceChart`, `ClearableInput`, `RiskControl`, `SupportButton`); design tokens in `web/src/index.css` — the
 only stylesheet in the tree; plain-language copy in `web/src/lib/glossary.ts` (18 entries —
 the two exceptions are `DIM_INFO` in `ProView.tsx` and the dividend-yield tip inline in
 `App.tsx`). The app is a PWA: `index.html` registers `/sw.js`, so a stale service worker can
