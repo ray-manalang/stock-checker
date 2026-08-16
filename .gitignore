@@ -11,6 +11,7 @@ server/.env
 *.db-wal
 *.db-shm
 .cache/
+.mobile-audit/
 server/.venv/
 .venv/
 __pycache__/

@@ -1109,7 +1109,114 @@ body:has(.tape) .page {
   body {
     font-size: 16px;
   }
+  .page {
+    padding: 14px 12px 96px;
+  }
+  body:has(.tape) .page {
+    padding-bottom: 96px;
+  }
+  .brand {
+    font-size: 22px;
+  }
+  .nav {
+    gap: 10px;
+    padding-bottom: 14px;
+  }
+  .nav-links {
+    gap: 6px;
+  }
+  .nav-link {
+    padding: 6px 11px;
+    font-size: 12px;
+  }
+  /* Username duplicates Profile on a phone; hide to free a row. */
+  .nav-account {
+    display: none;
+  }
   .metrics {
+    grid-template-columns: 1fr;
+  }
+  .cnbc-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 12px 14px 14px;
+    max-height: 420px;
+  }
+  .cnbc-title {
+    font-size: 12px;
+  }
+  .insight-cells {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+  .insight-cell {
+    min-width: calc(50% - 1px);
+    flex: 1 1 40%;
+    padding: 8px 10px;
+  }
+  .insight-cell + .insight-cell {
+    border-left: none;
+  }
+  .insight-cell:nth-child(odd) {
+    border-right: 1px solid var(--hairline-soft);
+  }
+  .insight-cell:nth-child(n + 3) {
+    border-top: 1px solid var(--hairline-soft);
+    padding-top: 12px;
+  }
+  .insight-head {
+    padding: 14px 14px;
+    flex-wrap: wrap;
+  }
+  .risk-toolbar {
+    padding: 0 14px 12px;
+  }
+  .risk-seg {
+    width: 100%;
+  }
+  .risk-seg button {
+    flex: 1;
+    text-align: center;
+    padding: 8px 6px;
+    font-size: 11px;
+  }
+  .s-row {
+    gap: 10px;
+    padding: 12px 12px;
+  }
+  .s-px {
+    font-size: 14px;
+  }
+  .s-sub {
+    font-size: 11px;
+  }
+  .search {
+    flex-wrap: wrap;
+  }
+  .search input,
+  .search .clearable {
+    min-width: 0;
+    flex: 1 1 140px;
+  }
+  .guide-toc {
+    gap: 8px 12px;
+  }
+  .invite-banner {
+    padding: 14px 14px;
+  }
+  .profile-page,
+  .guide-page {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .tape {
+    height: auto;
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 400px) {
+  .cnbc-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -11,7 +11,7 @@ import {
 
 const VERDICT_LABEL = {
   BUY: { label: "Good time to buy", tone: "up" },
-  HOLD: { label: "No rush — wait", tone: "neutral" },
+  HOLD: { label: "No rush. Wait", tone: "neutral" },
   SELL: { label: "Avoid for now", tone: "down" },
 };
 

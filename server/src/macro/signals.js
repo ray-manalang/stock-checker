@@ -131,9 +131,9 @@ export function getZone(composite) {
 }
 
 const ZONE_ONE_LINER = {
-  "FULL DEPLOY": "Market conditions favor buying — full sizing, scanner on.",
-  REDUCED: "Market conditions say be cautious — trim sizing to 60%.",
-  DEFENSIVE: "Market conditions say be defensive — no new longs, scanner off.",
+  "FULL DEPLOY": "Market conditions favor buying. Full sizing, scanner on.",
+  REDUCED: "Market conditions say be cautious. Trim sizing to 60%.",
+  DEFENSIVE: "Market conditions say be defensive. No new longs, scanner off.",
 };
 
 /**

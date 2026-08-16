@@ -32,7 +32,7 @@ For a friend-facing walkthrough see [USER-GUIDE.md](USER-GUIDE.md) (also under *
 **Research tab** — one search box and one answer card:
 
 - Live price, day change (toggle % / $), and where today's price sits in its 52-week range
-- A verdict in plain English (*"Good time to buy"*, *"Wait for a dip"*, *"No rush — wait"*,
+- A verdict in plain English (*"Good time to buy"*, *"Wait for a dip"*, *"No rush. Wait"*,
   *"Avoid for now"*) with a 4-bar confidence meter
 - An at-a-glance row: **Timing** (RSI), **Quality** (fundamental score), **Price** (rich/cheap)
 - *"Why this call?"* — in its favor / watch out / a good plan

@@ -267,7 +267,7 @@ export default function App({ user, onLogout, onUser }: AppProps) {
             </button>
           )}
           <button
-            className="nav-link"
+            className="nav-link nav-account"
             type="button"
             onClick={() => setView("profile")}
             title={user.username}

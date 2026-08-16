@@ -16,7 +16,7 @@ import {
 const VERDICTS = {
   BUY: { label: "Good time to buy", tone: "up", signal: "BUY" },
   WAIT_DIP: { label: "Wait for a dip", tone: "warn", signal: "HOLD" },
-  NO_RUSH: { label: "No rush — wait", tone: "neutral", signal: "HOLD" },
+  NO_RUSH: { label: "No rush. Wait", tone: "neutral", signal: "HOLD" },
   AVOID: { label: "Avoid for now", tone: "down", signal: "SELL" },
 };
 
@@ -77,13 +77,13 @@ function buildWhy(key, { trend, price, timing, quality }) {
     case "AVOID":
       return `The trend is ${trendLc}${
         quality.word === "Shaky" ? " and the business looks shaky" : ""
-      } — better to wait.`;
+      }. Better to wait.`;
     case "WAIT_DIP":
       return quality.word === "Not rated"
-        ? `It ${priceLc} right now — a pullback would be a better entry.`
-        : `The business looks ${quality.word.toLowerCase()}, but it ${priceLc} right now — a pullback would be a better entry.`;
+        ? `It ${priceLc} right now. A pullback would be a better entry.`
+        : `The business looks ${quality.word.toLowerCase()}, but it ${priceLc} right now. A pullback would be a better entry.`;
     default:
-      return `Nothing here is compelling yet — the trend is ${trendLc} and the price ${priceLc}.`;
+      return `Nothing here is compelling yet. The trend is ${trendLc} and the price ${priceLc}.`;
   }
 }
 

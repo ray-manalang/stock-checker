@@ -499,7 +499,7 @@ quality healthy +1.5 / shaky −1.5
 score ≥  2.5  → "Good time to buy"   (BUY)
 score ≤ −1.5  → "Avoid for now"      (SELL)
 pricey or hot, and not shaky → "Wait for a dip"  (HOLD)
-otherwise     → "No rush — wait"     (HOLD)
+otherwise     → "No rush. Wait"     (HOLD)
 ```
 
 Confidence 1–4 from `|score|`.
