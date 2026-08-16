@@ -364,14 +364,63 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
             )}
           </>
         ) : (
-          <div className="insight-foot" style={{ padding: 8 }}>
-            {ready
-              ? "No holdings yet. Use “Import positions” to drop in a CSV export from your brokerage."
-              : "Loading…"}
+          <div style={{ padding: "8px 8px 16px" }}>
+            <div className="insight-foot" style={{ padding: "8px 10px 4px", textAlign: "left" }}>
+              {ready
+                ? "No holdings yet. Import a positions CSV from your brokerage — format below."
+                : "Loading…"}
+            </div>
+            {ready && <CsvFormatHelp defaultOpen />}
           </div>
         )}
       </div>
     </>
+  );
+}
+
+const SAMPLE_CSV = `Symbol,Quantity,Average Cost Basis,Institution
+AAPL,10,178.50,Fidelity
+MSFT,5,410.00,Fidelity
+BRK.B,2,405.25,Schwab
+`;
+
+function downloadSampleCsv() {
+  const blob = new Blob([SAMPLE_CSV], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "holdings-sample.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function CsvFormatHelp({ defaultOpen = false }: { defaultOpen?: boolean }) {
+  return (
+    <details className="csv-help" open={defaultOpen || undefined}>
+      <summary>CSV format &amp; instructions</summary>
+      <div className="csv-help-body">
+        <p>
+          Export positions from your brokerage (or combine accounts into one file). The first row
+          must be headers. Required columns: <strong>ticker / symbol</strong> and{" "}
+          <strong>shares / quantity</strong>. Optional: cost basis (per share or total) and
+          institution.
+        </p>
+        <p>Cash sweeps, money-market funds, and CUSIPs are skipped automatically.</p>
+        <p className="csv-help-label">Example</p>
+        <pre className="csv-sample">{`Symbol,Quantity,Average Cost Basis,Institution
+AAPL,10,178.50,Fidelity
+MSFT,5,410.00,Fidelity
+BRK.B,2,405.25,Schwab
+SPAXX,1200.55,1.00,Fidelity`}</pre>
+        <p>
+          Click <strong>Import positions</strong>, then upload or paste. You’ll map columns
+          (remembered next time). Dots in tickers like <code>BRK.B</code> are fine.
+        </p>
+        <button type="button" className="btn-ghost btn-sm" onClick={downloadSampleCsv}>
+          Download sample CSV
+        </button>
+      </div>
+    </details>
   );
 }
 
@@ -586,47 +635,7 @@ function ImportPanel({
         your holdings — it's a snapshot, not a running log. Nothing leaves this server.
       </div>
 
-      <details className="csv-help">
-        <summary>CSV format &amp; instructions</summary>
-        <div className="csv-help-body">
-          <p>
-            Export positions from your brokerage (or combine accounts into one file). The first
-            row must be headers. Required columns: <strong>ticker</strong> and{" "}
-            <strong>shares</strong>. Optional: cost basis (per share or total) and institution.
-          </p>
-          <p>Cash sweeps, money-market funds, and CUSIPs are skipped automatically.</p>
-          <p className="csv-help-label">Example</p>
-          <pre className="csv-sample">{`Symbol,Quantity,Average Cost Basis,Institution
-AAPL,10,178.50,Fidelity
-MSFT,5,410.00,Fidelity
-BRK.B,2,405.25,Schwab
-SPAXX,1200.55,1.00,Fidelity`}</pre>
-          <p>
-            After upload you’ll map columns (remembered next time). Dots in tickers like{" "}
-            <code>BRK.B</code> are fine — they’re normalized to Yahoo’s <code>BRK-B</code> form.
-          </p>
-          <button
-            type="button"
-            className="btn-ghost btn-sm"
-            onClick={() => {
-              const sample = `Symbol,Quantity,Average Cost Basis,Institution
-AAPL,10,178.50,Fidelity
-MSFT,5,410.00,Fidelity
-BRK.B,2,405.25,Schwab
-`;
-              const blob = new Blob([sample], { type: "text/csv" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = "holdings-sample.csv";
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-          >
-            Download sample CSV
-          </button>
-        </div>
-      </details>
+      <CsvFormatHelp defaultOpen />
 
       {summary ? (
         <div>
