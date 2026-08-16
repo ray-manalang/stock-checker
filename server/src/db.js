@@ -4,6 +4,8 @@
 import Database from "better-sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
+import { ensureMultiUserSchema, migrateLegacyPersonalData } from "./migrate.js";
+import { decryptNumber, encryptNumber } from "./cryptoUtil.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH =
@@ -54,6 +56,7 @@ export function db() {
       indicators_json TEXT,
       fetched_at TEXT NOT NULL
     );
+    -- Legacy single-tenant shapes; migrate.js rebuilds these with user_id.
     CREATE TABLE IF NOT EXISTS watchlist (
       ticker TEXT PRIMARY KEY,
       added_at TEXT NOT NULL
@@ -85,8 +88,6 @@ export function db() {
       cost REAL DEFAULT 0,
       created_at TEXT NOT NULL
     );
-    -- Append-only history of every verdict issued, for Phase 4 backtesting.
-    -- Distinct from recent_checks (which keeps only the latest row per ticker).
     CREATE TABLE IF NOT EXISTS verdict_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       ticker TEXT NOT NULL,
@@ -97,8 +98,6 @@ export function db() {
       source TEXT,
       created_at TEXT NOT NULL
     );
-    -- Per-watchlist-ticker last verdict, so the daily buy-signal job only
-    -- notifies on the transition *into* "Good time to buy".
     CREATE TABLE IF NOT EXISTS watchlist_verdict_state (
       ticker TEXT PRIMARY KEY,
       last_verdict TEXT,
@@ -106,40 +105,30 @@ export function db() {
       last_checked_at TEXT,
       notified_at TEXT
     );
-    -- Imported portfolio positions. Replaced wholesale on each CSV import
-    -- (snapshot, not a transaction log). One row per (ticker, source).
     CREATE TABLE IF NOT EXISTS holdings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       ticker TEXT NOT NULL,
-      shares REAL,
-      cost_basis REAL,
+      shares TEXT,
+      cost_basis TEXT,
       source TEXT,
       imported_at TEXT NOT NULL
     );
-    -- Manual per-ticker metadata that must survive a re-import (the
-    -- tax-advantaged toggle from Phase 3.3). Keyed by ticker, not wiped.
     CREATE TABLE IF NOT EXISTS holdings_flags (
       ticker TEXT PRIMARY KEY,
       tax_advantaged INTEGER DEFAULT 0,
       updated_at TEXT
     );
-    -- Small key/value store for server-side settings (risk tolerance, demo
-    -- mode, remembered CSV column mapping, holdings as-of date).
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT,
       updated_at TEXT
     );
-    -- Company-name cache. The static NAMES map only covers the scanner universe
-    -- (S&P 500); this fills in names for anything else held (ETFs, funds, dual-
-    -- class shares) once resolved via the sidecar. Names are effectively static.
     CREATE TABLE IF NOT EXISTS company_names (
       ticker TEXT PRIMARY KEY,
       name TEXT,
       updated_at TEXT
     );
   `);
-  // Additive column migrations (safe on existing DBs — ignore "duplicate column").
   for (const ddl of [
     `ALTER TABLE scanner_results ADD COLUMN sector TEXT`,
     `ALTER TABLE scanner_results ADD COLUMN sector_rank INTEGER`,
@@ -151,10 +140,16 @@ export function db() {
       /* column already exists */
     }
   }
+  ensureMultiUserSchema(_db);
   return _db;
 }
 
-// ---------- settings (key/value) ----------
+/** Run after bootstrap admin exists — attaches legacy rows to that user. */
+export function runPersonalDataMigration(adminUserId) {
+  return migrateLegacyPersonalData(db(), adminUserId);
+}
+
+// ---------- settings (key/value) — global (non-personal) only ----------
 export function getSetting(key, fallback = null) {
   const row = db().prepare(`SELECT value FROM settings WHERE key = ?`).get(key);
   if (!row) return fallback;
@@ -171,6 +166,28 @@ export function setSetting(key, value) {
       `INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)`,
     )
     .run(key, JSON.stringify(value), new Date().toISOString());
+  return value;
+}
+
+// ---------- per-user settings ----------
+export function getUserSetting(userId, key, fallback = null) {
+  const row = db()
+    .prepare(`SELECT value FROM user_settings WHERE user_id = ? AND key = ?`)
+    .get(userId, key);
+  if (!row) return fallback;
+  try {
+    return JSON.parse(row.value);
+  } catch {
+    return row.value;
+  }
+}
+
+export function setUserSetting(userId, key, value) {
+  db()
+    .prepare(
+      `INSERT OR REPLACE INTO user_settings (user_id, key, value, updated_at) VALUES (?, ?, ?, ?)`,
+    )
+    .run(userId, key, JSON.stringify(value), new Date().toISOString());
   return value;
 }
 
@@ -221,10 +238,10 @@ export function verdictLogStats() {
 }
 
 // ---------- watchlist verdict state ----------
-export function getWatchlistVerdictState(ticker) {
+export function getWatchlistVerdictState(userId, ticker) {
   const r = db()
-    .prepare(`SELECT * FROM watchlist_verdict_state WHERE ticker = ?`)
-    .get(ticker);
+    .prepare(`SELECT * FROM watchlist_verdict_state WHERE user_id = ? AND ticker = ?`)
+    .get(userId, ticker);
   if (!r) return null;
   return {
     ticker: r.ticker,
@@ -235,10 +252,10 @@ export function getWatchlistVerdictState(ticker) {
   };
 }
 
-export function listWatchlistVerdictState() {
+export function listWatchlistVerdictState(userId) {
   return db()
-    .prepare(`SELECT * FROM watchlist_verdict_state`)
-    .all()
+    .prepare(`SELECT * FROM watchlist_verdict_state WHERE user_id = ?`)
+    .all(userId)
     .map((r) => ({
       ticker: r.ticker,
       lastVerdict: r.last_verdict,
@@ -248,74 +265,99 @@ export function listWatchlistVerdictState() {
     }));
 }
 
-export function saveWatchlistVerdictState({ ticker, lastVerdict, lastLabel, notifiedAt }) {
+export function saveWatchlistVerdictState({
+  userId,
+  ticker,
+  lastVerdict,
+  lastLabel,
+  notifiedAt,
+}) {
   const at = new Date().toISOString();
-  // notified_at is written verbatim (including null) so the job can clear it
-  // when a BUY episode ends.
   db()
     .prepare(
-      `INSERT INTO watchlist_verdict_state (ticker, last_verdict, last_label, last_checked_at, notified_at)
-       VALUES (@ticker, @lastVerdict, @lastLabel, @at, @notifiedAt)
-       ON CONFLICT(ticker) DO UPDATE SET
+      `INSERT INTO watchlist_verdict_state (user_id, ticker, last_verdict, last_label, last_checked_at, notified_at)
+       VALUES (@userId, @ticker, @lastVerdict, @lastLabel, @at, @notifiedAt)
+       ON CONFLICT(user_id, ticker) DO UPDATE SET
          last_verdict = @lastVerdict,
          last_label = @lastLabel,
          last_checked_at = @at,
          notified_at = @notifiedAt`,
     )
-    .run({ ticker, lastVerdict, lastLabel: lastLabel ?? null, at, notifiedAt: notifiedAt ?? null });
+    .run({
+      userId,
+      ticker,
+      lastVerdict,
+      lastLabel: lastLabel ?? null,
+      at,
+      notifiedAt: notifiedAt ?? null,
+    });
 }
 
-export function removeWatchlistVerdictState(ticker) {
-  db().prepare(`DELETE FROM watchlist_verdict_state WHERE ticker = ?`).run(ticker);
+export function removeWatchlistVerdictState(userId, ticker) {
+  db()
+    .prepare(`DELETE FROM watchlist_verdict_state WHERE user_id = ? AND ticker = ?`)
+    .run(userId, ticker);
 }
 
 // ---------- holdings ----------
-/** Replace all holdings wholesale (snapshot import). `rows` = [{ticker, shares, costBasis, source}]. */
-export function replaceHoldings(rows, asOf) {
+/** Replace all holdings for a user. Rows may be plaintext numbers; pass dek to encrypt. */
+export function replaceHoldings(userId, rows, asOf, dek = null) {
   const at = new Date().toISOString();
   const insert = db().prepare(
-    `INSERT INTO holdings (ticker, shares, cost_basis, source, imported_at)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO holdings (user_id, ticker, shares, cost_basis, source, imported_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
   );
   const tx = db().transaction((list) => {
-    db().prepare(`DELETE FROM holdings`).run();
+    db().prepare(`DELETE FROM holdings WHERE user_id = ?`).run(userId);
     for (const r of list) {
-      insert.run(r.ticker, r.shares ?? null, r.costBasis ?? null, r.source ?? null, at);
+      const shares =
+        dek != null ? encryptNumber(r.shares ?? null, dek) : r.shares == null ? null : String(r.shares);
+      const cost =
+        dek != null
+          ? encryptNumber(r.costBasis ?? null, dek)
+          : r.costBasis == null
+            ? null
+            : String(r.costBasis);
+      insert.run(userId, r.ticker, shares, cost, r.source ?? null, at);
     }
   });
   tx(rows);
-  setSetting("holdingsAsOf", asOf ?? at);
+  setUserSetting(userId, "holdingsAsOf", asOf ?? at);
   return at;
 }
 
-/** Raw holdings rows (one per ticker+source), as stored. */
-export function listHoldingsRaw() {
+/** Raw holdings rows; decrypts amounts when dek provided. */
+export function listHoldingsRaw(userId, dek = null) {
   return db()
-    .prepare(`SELECT ticker, shares, cost_basis, source FROM holdings ORDER BY ticker ASC`)
-    .all()
+    .prepare(
+      `SELECT ticker, shares, cost_basis, source FROM holdings WHERE user_id = ? ORDER BY ticker ASC`,
+    )
+    .all(userId)
     .map((r) => ({
       ticker: r.ticker,
-      shares: r.shares,
-      costBasis: r.cost_basis,
+      shares: decryptNumber(r.shares, dek),
+      costBasis: decryptNumber(r.cost_basis, dek),
       source: r.source,
     }));
 }
 
-export function holdingsFlags() {
+export function holdingsFlags(userId) {
   const out = {};
-  for (const r of db().prepare(`SELECT ticker, tax_advantaged FROM holdings_flags`).all()) {
+  for (const r of db()
+    .prepare(`SELECT ticker, tax_advantaged FROM holdings_flags WHERE user_id = ?`)
+    .all(userId)) {
     out[r.ticker] = { taxAdvantaged: !!r.tax_advantaged };
   }
   return out;
 }
 
-export function setHoldingFlag(ticker, taxAdvantaged) {
+export function setHoldingFlag(userId, ticker, taxAdvantaged) {
   db()
     .prepare(
-      `INSERT OR REPLACE INTO holdings_flags (ticker, tax_advantaged, updated_at)
-       VALUES (?, ?, ?)`,
+      `INSERT OR REPLACE INTO holdings_flags (user_id, ticker, tax_advantaged, updated_at)
+       VALUES (?, ?, ?, ?)`,
     )
-    .run(ticker, taxAdvantaged ? 1 : 0, new Date().toISOString());
+    .run(userId, ticker, taxAdvantaged ? 1 : 0, new Date().toISOString());
 }
 
 // ---------- company meta cache (name + sector) ----------
@@ -528,20 +570,31 @@ export function saveAnalystScore({ ticker, quarterEnd, dimensions, fundamentalSc
 }
 
 // ---------- recent checks ----------
-export function recordCheck({ ticker, name, verdictLabel, verdictTone, price, llm }) {
+export function recordCheck(userId, { ticker, name, verdictLabel, verdictTone, price, llm }) {
   db()
     .prepare(
       `INSERT OR REPLACE INTO recent_checks
-         (ticker, name, verdict_label, verdict_tone, price, llm, checked_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (user_id, ticker, name, verdict_label, verdict_tone, price, llm, checked_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(ticker, name ?? null, verdictLabel ?? null, verdictTone ?? null, price ?? null, llm ? 1 : 0, new Date().toISOString());
+    .run(
+      userId,
+      ticker,
+      name ?? null,
+      verdictLabel ?? null,
+      verdictTone ?? null,
+      price ?? null,
+      llm ? 1 : 0,
+      new Date().toISOString(),
+    );
 }
 
-export function recentChecks(limit = 12) {
+export function recentChecks(userId, limit = 12) {
   return db()
-    .prepare(`SELECT * FROM recent_checks ORDER BY checked_at DESC LIMIT ?`)
-    .all(limit)
+    .prepare(
+      `SELECT * FROM recent_checks WHERE user_id = ? ORDER BY checked_at DESC LIMIT ?`,
+    )
+    .all(userId, limit)
     .map((r) => ({
       ticker: r.ticker,
       name: r.name,
@@ -563,10 +616,27 @@ export function recordUsage({ kind, model, inputTokens, outputTokens, cost }) {
     .run(kind, model, inputTokens ?? 0, outputTokens ?? 0, cost ?? 0, new Date().toISOString());
 }
 
+/** Cost + call/token totals for the current calendar day (UTC) — spend guard. */
+export function usageToday() {
+  const now = new Date();
+  const dayStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  ).toISOString();
+  const row = db()
+    .prepare(
+      `SELECT COUNT(*) AS calls, COALESCE(SUM(cost), 0) AS cost
+       FROM llm_usage WHERE created_at >= ?`,
+    )
+    .get(dayStart);
+  return { calls: row.calls, cost: Number(row.cost), since: dayStart };
+}
+
 /** Cost + call/token totals for the current calendar month (UTC). */
 export function usageThisMonth() {
   const now = new Date();
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  const monthStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  ).toISOString();
   const row = db()
     .prepare(
       `SELECT COUNT(*) AS calls,
@@ -623,55 +693,88 @@ export function freshSeriesMap(tickers, ttlMs) {
 }
 
 // ---------- watchlist ----------
-export function listWatchlist() {
+export function listWatchlist(userId) {
   return db()
-    .prepare(`SELECT ticker, added_at FROM watchlist ORDER BY added_at DESC`)
-    .all()
+    .prepare(
+      `SELECT ticker, added_at FROM watchlist WHERE user_id = ? ORDER BY added_at DESC`,
+    )
+    .all(userId)
     .map((r) => ({ ticker: r.ticker, addedAt: r.added_at }));
 }
 
-export function addWatchlist(ticker) {
+export function addWatchlist(userId, ticker) {
   db()
-    .prepare(`INSERT OR IGNORE INTO watchlist (ticker, added_at) VALUES (?, ?)`)
-    .run(ticker, new Date().toISOString());
+    .prepare(
+      `INSERT OR IGNORE INTO watchlist (user_id, ticker, added_at) VALUES (?, ?, ?)`,
+    )
+    .run(userId, ticker, new Date().toISOString());
 }
 
-export function removeWatchlist(ticker) {
-  db().prepare(`DELETE FROM watchlist WHERE ticker = ?`).run(ticker);
+export function removeWatchlist(userId, ticker) {
+  db()
+    .prepare(`DELETE FROM watchlist WHERE user_id = ? AND ticker = ?`)
+    .run(userId, ticker);
 }
 
 // ---------- alerts ----------
-export function listAlerts(status) {
+export function listAlerts(userId, status) {
   const sql = status
-    ? `SELECT * FROM alerts WHERE status = ? ORDER BY created_at DESC`
-    : `SELECT * FROM alerts ORDER BY created_at DESC`;
-  const rows = status ? db().prepare(sql).all(status) : db().prepare(sql).all();
+    ? `SELECT * FROM alerts WHERE user_id = ? AND status = ? ORDER BY created_at DESC`
+    : `SELECT * FROM alerts WHERE user_id = ? ORDER BY created_at DESC`;
+  const rows = status
+    ? db().prepare(sql).all(userId, status)
+    : db().prepare(sql).all(userId);
   return rows.map(mapAlert);
 }
 
-export function addAlert({ ticker, targetLow, targetHigh }) {
+/** All active alerts across users (cron). Includes user_id + alert_email join. */
+export function listActiveAlertsAllUsers() {
+  return db()
+    .prepare(
+      `SELECT a.*, u.alert_email AS alert_email, u.role AS user_role
+       FROM alerts a
+       JOIN users u ON u.id = a.user_id
+       WHERE a.status = 'active'
+       ORDER BY a.created_at DESC`,
+    )
+    .all()
+    .map((r) => ({
+      ...mapAlert(r),
+      userId: r.user_id,
+      alertEmail: r.alert_email ?? null,
+      userRole: r.user_role,
+    }));
+}
+
+export function addAlert(userId, { ticker, targetLow, targetHigh }) {
   const at = new Date().toISOString();
   const info = db()
     .prepare(
-      `INSERT INTO alerts (ticker, target_low, target_high, status, created_at)
-       VALUES (?, ?, ?, 'active', ?)`,
+      `INSERT INTO alerts (user_id, ticker, target_low, target_high, status, created_at)
+       VALUES (?, ?, ?, ?, 'active', ?)`,
     )
-    .run(ticker, targetLow ?? null, targetHigh ?? null, at);
-  return { id: info.lastInsertRowid, ticker, targetLow, targetHigh, status: "active", createdAt: at };
+    .run(userId, ticker, targetLow ?? null, targetHigh ?? null, at);
+  return {
+    id: info.lastInsertRowid,
+    ticker,
+    targetLow,
+    targetHigh,
+    status: "active",
+    createdAt: at,
+  };
 }
 
-export function removeAlert(id) {
-  db().prepare(`DELETE FROM alerts WHERE id = ?`).run(id);
+export function removeAlert(userId, id) {
+  db().prepare(`DELETE FROM alerts WHERE id = ? AND user_id = ?`).run(id, userId);
 }
 
-/** Edit an active alert's targets and re-arm it. */
-export function updateAlert(id, { targetLow, targetHigh }) {
+export function updateAlert(userId, id, { targetLow, targetHigh }) {
   db()
     .prepare(
       `UPDATE alerts SET target_low = ?, target_high = ?, status = 'active', triggered_at = NULL
-       WHERE id = ?`,
+       WHERE id = ? AND user_id = ?`,
     )
-    .run(targetLow ?? null, targetHigh ?? null, id);
+    .run(targetLow ?? null, targetHigh ?? null, id, userId);
 }
 
 export function markAlertTriggered(id) {
@@ -690,4 +793,145 @@ function mapAlert(r) {
     createdAt: r.created_at,
     triggeredAt: r.triggered_at,
   };
+}
+
+// ---------- users / sessions / invites ----------
+export function countUsers() {
+  return db().prepare(`SELECT COUNT(*) AS n FROM users`).get().n;
+}
+
+export function createUser({ username, passwordHash, role = "user", alertEmail = null }) {
+  const at = new Date().toISOString();
+  const info = db()
+    .prepare(
+      `INSERT INTO users (username, password_hash, role, alert_email, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .run(username, passwordHash, role, alertEmail, at);
+  return findUserById(info.lastInsertRowid);
+}
+
+function mapUser(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    username: r.username,
+    passwordHash: r.password_hash,
+    role: r.role,
+    alertEmail: r.alert_email ?? null,
+    createdAt: r.created_at,
+  };
+}
+
+export function findUserById(id) {
+  return mapUser(db().prepare(`SELECT * FROM users WHERE id = ?`).get(id));
+}
+
+export function findUserByUsername(username) {
+  return mapUser(
+    db().prepare(`SELECT * FROM users WHERE lower(username) = lower(?)`).get(username),
+  );
+}
+
+export function listUsers() {
+  return db()
+    .prepare(`SELECT id, username, role, alert_email, created_at FROM users ORDER BY id`)
+    .all()
+    .map((r) => ({
+      id: r.id,
+      username: r.username,
+      role: r.role,
+      alertEmail: r.alert_email ?? null,
+      createdAt: r.created_at,
+    }));
+}
+
+export function updateUserProfile(userId, { alertEmail } = {}) {
+  if (alertEmail !== undefined) {
+    db()
+      .prepare(`UPDATE users SET alert_email = ? WHERE id = ?`)
+      .run(alertEmail?.trim() || null, userId);
+  }
+  return findUserById(userId);
+}
+
+export function setUserHoldingsKeys(userId, { dekWrapped, kdfSalt }) {
+  db()
+    .prepare(
+      `UPDATE users SET holdings_dek_wrapped = ?, holdings_kdf_salt = ? WHERE id = ?`,
+    )
+    .run(dekWrapped, kdfSalt, userId);
+}
+
+export function getUserHoldingsKeys(userId) {
+  const r = db()
+    .prepare(`SELECT holdings_dek_wrapped, holdings_kdf_salt FROM users WHERE id = ?`)
+    .get(userId);
+  if (!r?.holdings_dek_wrapped) return null;
+  return { dekWrapped: r.holdings_dek_wrapped, kdfSalt: r.holdings_kdf_salt };
+}
+
+export function createSession(id, userId, expiresAt, holdingsDekBlob = null) {
+  db()
+    .prepare(
+      `INSERT INTO sessions (id, user_id, created_at, expires_at, holdings_dek_blob) VALUES (?, ?, ?, ?, ?)`,
+    )
+    .run(id, userId, new Date().toISOString(), expiresAt, holdingsDekBlob);
+}
+
+export function getSession(id) {
+  const r = db().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id);
+  if (!r) return null;
+  if (new Date(r.expires_at).getTime() < Date.now()) {
+    deleteSession(id);
+    return null;
+  }
+  return {
+    id: r.id,
+    userId: r.user_id,
+    expiresAt: r.expires_at,
+    holdingsDekBlob: r.holdings_dek_blob ?? null,
+  };
+}
+
+export function touchSession(id, expiresAt) {
+  db().prepare(`UPDATE sessions SET expires_at = ? WHERE id = ?`).run(expiresAt, id);
+}
+
+export function deleteSession(id) {
+  db().prepare(`DELETE FROM sessions WHERE id = ?`).run(id);
+}
+
+export function createInvite({ token, createdBy, expiresAt }) {
+  db()
+    .prepare(
+      `INSERT INTO invites (token, created_by, expires_at) VALUES (?, ?, ?)`,
+    )
+    .run(token, createdBy, expiresAt);
+}
+
+export function getInvite(token) {
+  const r = db().prepare(`SELECT * FROM invites WHERE token = ?`).get(token);
+  if (!r) return null;
+  return {
+    token: r.token,
+    createdBy: r.created_by,
+    expiresAt: r.expires_at,
+    usedBy: r.used_by,
+    usedAt: r.used_at,
+  };
+}
+
+export function consumeInvite(token, userId) {
+  db()
+    .prepare(`UPDATE invites SET used_by = ?, used_at = ? WHERE token = ?`)
+    .run(userId, new Date().toISOString(), token);
+}
+
+/** All users that have at least one watchlist ticker (for signal cron). */
+export function listUserIdsWithWatchlist() {
+  return db()
+    .prepare(`SELECT DISTINCT user_id AS id FROM watchlist`)
+    .all()
+    .map((r) => r.id);
 }

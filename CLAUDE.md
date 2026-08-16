@@ -37,8 +37,9 @@ Scheduled jobs (`server/src/scheduler.js`, node-cron) write snapshots to SQLite
 (`server/src/db.js`, better-sqlite3); read endpoints serve the latest instantly with an
 `{ data, asOf, stale }` envelope — **never compute on page load**. Every layer degrades
 gracefully. Cadence: macro `*/20m`, scanner `21:15 ET`, analyst `Sun 03:00 ET`, alerts
-`*/10m` — the two market-clock jobs are pinned to `MARKET_TZ` (default `America/New_York`)
-since the container runs UTC. Macro and scanner also run on boot when their tables are empty.
+`*/10m`, watchlist signals `weekdays 16:10 ET` — the **three** market-clock jobs (scanner,
+analyst, watchlist signals) are pinned to `MARKET_TZ` (default `America/New_York`) since the
+container runs UTC. Macro and scanner also run on boot when their tables are empty.
 
 - **Data sources** (`stocks.js`): Yahoo via a Python sidecar (`scripts/yf_fetch.py`,
   yfinance/curl_cffi — impersonates a browser TLS fingerprint, since Yahoo 429s plain Node)
@@ -55,12 +56,21 @@ since the container runs UTC. Macro and scanner also run on boot when their tabl
   6 weighted signals → composite → zone. Cutoffs: **≥70 FULL DEPLOY, ≥40 REDUCED, else
   DEFENSIVE**. A signal that fails to fetch scores a neutral 50 *at full weight*.
 - **L2 Scanner** (`GET /api/scanner`) → `scanner/engine.js` + `scanner/factors.js`:
-  large-cap universe sliced to `SCANNER_UNIVERSE_SIZE` (default 50), 4–5 percentile-ranked
-  factors, equal-weight composite. Macro-gated: **DEFENSIVE = off, REDUCED = top 20**
-  (this replaced an older "composite ≥ 75" rule).
+  full S&P 500 (Wikipedia-scraped) sliced to `SCANNER_UNIVERSE_SIZE` — **default 550**, or
+  50 when `SCANNER_FULL_UNIVERSE=0` forces the curated large-cap list. 4–5
+  percentile-ranked factors, equal-weight composite, plus a within-sector rank.
+  Macro-gated: **DEFENSIVE = off, REDUCED = top 20** (this replaced an older
+  "composite ≥ 75" rule).
 - **L3 Analyst** (`analyst/`): Sonnet Message-Batch fundamental scoring cached by
-  `(ticker, quarter_end)`; `blender.js` blends quant (60%) + fundamental (40%), re-ranks,
-  flags rank shifts ≥ 3 as upgrades/downgrades (joined into `/api/scanner` at read time).
+  `(ticker, quarter_end)`; `blender.js` blends quant + fundamental, re-ranks, flags rank
+  shifts ≥ 3 as upgrades/downgrades (joined into `/api/scanner` at read time).
+- **Risk tolerance** (`risk.js`) is *not* cosmetic — it feeds two pieces of server math at
+  request time: the blender's quant weight (`0.45` / `0.60` / `0.75`) and the buy-zone
+  width scale (`1.4` / `1.0` / `0.6`). **Don't write "the 60/40 blend" or
+  "`0.88 × price`" as if they were constants** — those are the `balanced` defaults only.
+  Persisted in `settings.riskTolerance`. Caveat: `buyZoneScale` only reaches the output when
+  there's no Claude analysis (Claude's `buy_zone` wins), so with a key set only the blend
+  half of the control is live.
 - **Watchlist + alerts**: `watchlist`/`alerts` tables; `alerts.js` checks buy-zone crossings
   on a cron and emails via Resend (optional — otherwise it just marks them triggered).
 - **Tape + quotes**: `/api/tape` (indexes + watchlist + top-20 scanner) and `/api/quotes`
@@ -73,10 +83,12 @@ since the container runs UTC. Macro and scanner also run on boot when their tabl
 `POST /api/refresh/:layer` (macro|scanner|analyst) kicks a background recompute.
 
 **Dual-mode server**: `index.js` serves the built React app when `STATIC_DIR` is set
-(production/Docker), else API-only with Vite proxying in dev. No auth on any route — LAN only.
+(production/Docker), else API-only with Vite proxying in dev. Invite-only session auth;
+personal data is per-user. Cloudflare Access may sit in front on the public hostname.
 
-**Web** (`web/`): three nav tabs, all in `App.tsx` (rendered with `display:none` toggling,
-not remounted — mounted components keep polling). **Home** (`main`) is the at-a-glance view:
+**Web** (`web/`): three nav tabs in `App.tsx`. Home and Research are toggled with
+`display:none` (mounted, so they keep polling); **Holdings is conditionally mounted**, so it
+unmounts and refetches on every visit. **Home** (`main`) is the at-a-glance view:
 holdings teaser + `ProView.tsx` (Market conditions/macro + Top-ranked/scanner + Market
 videos). **Research** owns everything ticker/watchlist: the check tool (search, recents,
 watchlist), the answer card, then the watchlist-driven cards — `WatchingToBuy.tsx`,
@@ -84,10 +96,12 @@ watchlist), the answer card, then the watchlist-driven cards — `WatchingToBuy.
 **Holdings** is `HoldingsPage.tsx`. A `?check=SYM` query param opens Research on that ticker
 (HA deep-links). `TickerTape.tsx` is a fixed footer in every view. `livePrices.ts` is a single
 refcounted 60s poller every price on screen subscribes to — add new price displays there
-rather than polling separately. Components in `web/src/components/` (InfoTip, PriceChart,
-SegmentedControl); design tokens in `web/src/index.css`; plain-language copy in
-`web/src/lib/glossary.ts` (the single source for every ⓘ — analyst dimension copy is the one
-exception, inline in `ProView.tsx`).
+rather than polling separately. Components in `web/src/components/` (`InfoTip`,
+`PriceChart`, `ClearableInput`, `RiskControl`); design tokens in `web/src/index.css` — the
+only stylesheet in the tree; plain-language copy in `web/src/lib/glossary.ts` (18 entries —
+the two exceptions are `DIM_INFO` in `ProView.tsx` and the dividend-yield tip inline in
+`App.tsx`). The app is a PWA: `index.html` registers `/sw.js`, so a stale service worker can
+serve old assets after a redeploy.
 
 ## Key conventions
 
@@ -104,8 +118,15 @@ exception, inline in `ProView.tsx`).
 - Client persistence is a handful of localStorage keys: `changeMode`, `blurAmounts`
   (Hide $), and per-card collapse flags (`macroCollapsed`, `scannerCollapsed`,
   `sectorAllocCollapsed`, `alertsCollapsed`, `holdingsTeaserCollapsed`, `watchingCollapsed`,
-  `trackRecordCollapsed` — all via the shared `lib/useCollapsed.ts` hook). Everything else —
-  including risk tolerance (the `settings` table) — is server-side SQLite.
+  `trackRecordCollapsed`). Only three go through `lib/useCollapsed.ts` — `ProView`,
+  `AlertsPanel`, and `HoldingsPage` hand-roll the same logic inline, so editing the hook
+  does **not** change all seven. Everything else — including risk tolerance (the `settings`
+  table) — is server-side SQLite.
+- `POST /api/alerts/check` and `POST /api/watchlist/signals/check` call their workers
+  directly, skipping the scheduler's concurrency guard. Route new manual triggers through
+  the guarded `run*Job()` wrappers instead.
+- `npm run build` needs the Mac's native `rollup` binary — it can't run from a Linux
+  sandbox against these `node_modules`. Build and verify on the Mac.
 - Snapshot endpoints return HTTP 200 with `data: null` before the first run — handle the
   null, don't expect a 404.
 - `STOCK_FIXTURES=1` serves deterministic demo data (never used unless opted in).

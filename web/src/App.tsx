@@ -10,10 +10,13 @@ import {
   getSettings,
   updateSettings,
   getHoldings,
+  logout,
+  createInvite,
   type Usage,
   type RecentCheck,
   type RiskTolerance,
   type Portfolio,
+  type AuthUser,
 } from "./api";
 import { useLivePrices } from "./livePrices";
 import type { CheckResponse, Tone, Word } from "./types";
@@ -36,9 +39,18 @@ function toneClass(t: Tone): string {
 
 type View = "main" | "research" | "holdings";
 
-export default function App() {
+type AppProps = {
+  user: AuthUser;
+  onLogout: () => void;
+  onUser: (u: AuthUser) => void;
+};
+
+export default function App({ user, onLogout, onUser }: AppProps) {
+  const isAdmin = user.role === "admin";
   const [view, setView] = useState<View>("main");
   const [risk, setRisk] = useState<RiskTolerance>("balanced");
+  const [alertEmail, setAlertEmail] = useState(user.alertEmail ?? "");
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [blur, setBlur] = useState(() => localStorage.getItem("blurAmounts") === "1");
   const [ticker, setTicker] = useState("");
   const [loading, setLoading] = useState(false);
@@ -48,8 +60,6 @@ export default function App() {
   const [watchInput, setWatchInput] = useState("");
   const [usage, setUsage] = useState<Usage | null>(null);
   const [recent, setRecent] = useState<RecentCheck[]>([]);
-  // Show daily change as percent or dollar/point — persisted, shared by the
-  // analysis card and the ticker tape.
   const [changeMode, setChangeMode] = useState<ChangeMode>(() =>
     localStorage.getItem("changeMode") === "abs" ? "abs" : "pct",
   );
@@ -70,22 +80,21 @@ export default function App() {
     refreshRecent();
   }, []);
 
-  // Load server settings (risk tolerance).
   useEffect(() => {
     getSettings()
-      .then((s) => setRisk(s.riskTolerance))
+      .then((s) => {
+        setRisk(s.riskTolerance);
+        if (s.alertEmail != null) setAlertEmail(s.alertEmail);
+      })
       .catch(() => {});
   }, []);
 
-  // Deep-link: a notification (or shared URL) can carry ?check=TICKER to open a
-  // ticker's check view directly.
   useEffect(() => {
     const sym = new URLSearchParams(window.location.search).get("check");
     if (sym) {
       setView("research");
       setTicker(sym.toUpperCase());
       run(sym);
-      // Clear the param so a refresh doesn't re-trigger.
       window.history.replaceState({}, "", window.location.pathname);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,14 +104,40 @@ export default function App() {
     setRisk(next);
     try {
       await updateSettings({ riskTolerance: next });
-      // Re-run the current ticker so the buy-zone width reflects the new risk.
       if (data) run(data.quote.ticker);
     } catch {
       /* ignore */
     }
   }
 
-  // Blur money figures — a fast "someone glanced at my screen" privacy toggle.
+  async function saveAlertEmail() {
+    try {
+      const s = await updateSettings({ alertEmail });
+      onUser({ ...user, alertEmail: s.alertEmail ?? null });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await logout();
+    } catch {
+      /* ignore */
+    }
+    onLogout();
+  }
+
+  async function handleInvite() {
+    try {
+      const inv = await createInvite(14);
+      setInviteUrl(inv.url);
+      await navigator.clipboard.writeText(inv.url).catch(() => {});
+    } catch (err) {
+      setInviteUrl(err instanceof Error ? err.message : "Invite failed");
+    }
+  }
+
   function toggleBlur() {
     setBlur((b) => {
       const next = !b;
@@ -111,11 +146,13 @@ export default function App() {
     });
   }
 
-  const refreshUsage = () => getUsage().then(setUsage).catch(() => {});
+  const refreshUsage = () => {
+    if (!isAdmin) return;
+    getUsage().then(setUsage).catch(() => {});
+  };
   useEffect(() => {
     refreshUsage();
-  }, []);
-  // Re-pull usage after a check (a deep-dive may have spent tokens).
+  }, [isAdmin]);
   useEffect(() => {
     if (data) refreshUsage();
   }, [data]);
@@ -208,8 +245,24 @@ export default function App() {
           >
             {blur ? "Show $" : "Hide $"}
           </button>
+          {isAdmin && (
+            <button className="nav-link" type="button" onClick={handleInvite} title="Copy invite link">
+              Invite
+            </button>
+          )}
+          <span className="nav-user" title={user.username}>
+            {user.username}
+          </span>
+          <button className="nav-link" type="button" onClick={handleLogout}>
+            Sign out
+          </button>
         </div>
       </nav>
+      {inviteUrl && (
+        <p className="invite-banner" role="status">
+          Invite link (copied if allowed): <code>{inviteUrl}</code>
+        </p>
+      )}
 
       {view === "holdings" && <HoldingsPage onBack={() => setView("main")} />}
 
@@ -390,7 +443,25 @@ export default function App() {
         onToggleChangeMode={toggleChangeMode}
         risk={risk}
         onRiskChange={changeRisk}
+        canRefresh={isAdmin}
       />
+      <div className="account-card insight-card">
+        <h3>Your account</h3>
+        <p className="subtitle">Alert emails go here when a buy-zone alert fires.</p>
+        <div className="account-row">
+          <input
+            id="alert-email"
+            type="email"
+            value={alertEmail}
+            onChange={(e) => setAlertEmail(e.target.value)}
+            placeholder="you@example.com"
+            aria-label="Alert email"
+          />
+          <button type="button" className="pill-btn" onClick={saveAlertEmail}>
+            Save
+          </button>
+        </div>
+      </div>
       </div>{/* pro-dashboard (home) */}
     </div>
     <TickerTape

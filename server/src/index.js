@@ -6,6 +6,8 @@ import { fileURLToPath } from "url";
 import { analyzeTicker } from "./analyze.js";
 import { llmConfigured } from "./llm.js";
 import {
+  db,
+  runPersonalDataMigration,
   latestMacro,
   latestScanner,
   latestFundamentalScores,
@@ -17,6 +19,7 @@ import {
   removeAlert,
   updateAlert,
   usageThisMonth,
+  usageToday,
   getCachedSeries,
   setCachedSeries,
   freshSeriesMap,
@@ -24,13 +27,13 @@ import {
   recentChecks,
   getAnalystDetail,
   logVerdict,
-  getSetting,
-  setSetting,
-  listHoldingsRaw,
+  getUserSetting,
+  setUserSetting,
   setHoldingFlag,
-  verdictLogStats,
   getCompanyMeta,
   upsertCompanyMeta,
+  listWatchlistVerdictState,
+  listUsers,
 } from "./db.js";
 import { fetchSeriesMulti, liveQuotes, fetchCompanyMeta } from "./stocks.js";
 import {
@@ -52,7 +55,30 @@ import {
 import { haSummary } from "./notify.js";
 import { buildBacktestReport } from "./backtest.js";
 import { checkWatchlistSignals } from "./watchlistSignals.js";
-import { listWatchlistVerdictState } from "./db.js";
+import {
+  requireAuth,
+  requireAdmin,
+  login,
+  logout,
+  registerWithInvite,
+  createInviteFor,
+  bootstrapAdminIfNeeded,
+  setSessionCookie,
+  clearSessionCookie,
+  parseCookies,
+  SESSION_COOKIE,
+  updateUserProfile,
+  meFromReq,
+} from "./auth.js";
+import { rateLimit, clientIp } from "./rateLimit.js";
+
+// ---------- boot ----------
+db();
+const boot = bootstrapAdminIfNeeded();
+const admin = boot || listUsers().find((u) => u.role === "admin") || listUsers()[0];
+if (admin) runPersonalDataMigration(admin.id);
+
+const DAILY_LLM_BUDGET_USD = Number(process.env.DAILY_LLM_BUDGET_USD) || 5;
 
 function normSym(s) {
   return String(s ?? "").trim().toUpperCase().replace(/\./g, "-");
@@ -61,6 +87,10 @@ function normSym(s) {
 function numOrNull(v) {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function userRisk(userId) {
+  return RISK_PROFILES[normalizeRisk(getUserSetting(userId, "riskTolerance", DEFAULT_RISK))];
 }
 
 // Last close + daily % change from a cached series.
@@ -113,25 +143,89 @@ const staticDir = process.env.STATIC_DIR
   ? path.resolve(process.env.STATIC_DIR)
   : null;
 
-app.use(cors({ origin: process.env.CORS_ORIGIN ?? true }));
-app.use(express.json());
+app.set("trust proxy", 1);
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN ?? true,
+    credentials: true,
+  }),
+);
+app.use(express.json({ limit: "2mb" }));
 
+// ---------- public routes (no auth) ----------
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, llm: llmConfigured() });
 });
 
-// Month-to-date Claude usage + cost.
-app.get("/api/usage", (_req, res) => {
-  res.json({ llm: llmConfigured(), ...usageThisMonth() });
+app.post("/api/auth/login", (req, res) => {
+  if (!rateLimit(`login:${clientIp(req)}`, { limit: 20, windowMs: 15 * 60 * 1000 })) {
+    return res.status(429).json({ error: "Too many login attempts — try again later" });
+  }
+  const result = login(req.body?.username, req.body?.password);
+  if (result.error) return res.status(result.status || 401).json({ error: result.error });
+  setSessionCookie(res, result.sessionId);
+  res.json({ user: result.user });
 });
 
-async function runCheck(ticker, res, opts) {
+app.post("/api/auth/logout", (req, res) => {
+  const sid = parseCookies(req)[SESSION_COOKIE];
+  logout(sid);
+  clearSessionCookie(res);
+  res.json({ ok: true });
+});
+
+app.post("/api/auth/register", (req, res) => {
+  if (!rateLimit(`register:${clientIp(req)}`, { limit: 10, windowMs: 60 * 60 * 1000 })) {
+    return res.status(429).json({ error: "Too many registration attempts" });
+  }
+  const result = registerWithInvite({
+    token: req.body?.token ?? req.body?.invite,
+    username: req.body?.username,
+    password: req.body?.password,
+    alertEmail: req.body?.alertEmail,
+  });
+  if (result.error) return res.status(result.status || 400).json({ error: result.error });
+  setSessionCookie(res, result.sessionId);
+  res.json({ user: result.user });
+});
+
+// Soft session: no cookie → null; invalid/expired cookie → clear + null; else user.
+app.get("/api/auth/me", (req, res) => {
+  const sid = parseCookies(req)[SESSION_COOKIE];
+  if (!sid) return res.json({ user: null });
+  let answered = false;
+  const softRes = {
+    status(code) {
+      this._code = code;
+      return this;
+    },
+    json(_body) {
+      if (this._code === 401) {
+        clearSessionCookie(res);
+        res.json({ user: null });
+        answered = true;
+      }
+      return this;
+    },
+  };
+  requireAuth(req, softRes, () => {
+    if (!answered) res.json({ user: meFromReq(req) });
+  });
+});
+
+// Everything under /api except health + /auth/* requires a valid session.
+app.use("/api", (req, res, next) => {
+  if (req.path === "/health" || req.path.startsWith("/auth/")) return next();
+  return requireAuth(req, res, next);
+});
+
+async function runCheck(userId, ticker, res, opts) {
   if (!ticker || typeof ticker !== "string") {
     return res.status(400).json({ error: "ticker is required" });
   }
   try {
     const result = await analyzeTicker(ticker, opts);
-    recordCheck({
+    recordCheck(userId, {
       ticker: result.quote.ticker,
       name: result.quote.name,
       verdictLabel: result.verdict.label,
@@ -155,22 +249,53 @@ async function runCheck(ticker, res, opts) {
   }
 }
 
+function checkDeepAllowed(wantDeep) {
+  if (!wantDeep) return false;
+  const today = usageToday();
+  if (today.cost >= DAILY_LLM_BUDGET_USD) return false;
+  return true;
+}
+
+// Month-to-date Claude usage + cost — admin ops only.
+app.get("/api/usage", requireAdmin, (_req, res) => {
+  res.json({ llm: llmConfigured(), today: usageToday(), ...usageThisMonth() });
+});
+
 // Persisted history of checked stocks (survives reloads). Revisiting one
 // re-opens instantly from the quarter cache — no new Claude call.
-app.get("/api/checks", (_req, res) => res.json({ data: recentChecks() }));
+app.get("/api/checks", (req, res) => res.json({ data: recentChecks(req.user.id) }));
 
 // Instant Check: live price + technicals + deterministic verdict, with a
 // cached/live Claude deep-dive when available. `?deep=0` skips the LLM;
 // `?fresh=1` forces a live Opus deep-dive even if the quarter cache has one.
+// Over daily spend budget, deep is forced off.
 app.get("/api/check/:sym", (req, res) => {
-  const deep = req.query.deep !== "0" && req.query.deep !== "false";
+  if (!rateLimit(`check:${req.user.id}:${clientIp(req)}`, { limit: 60, windowMs: 60_000 })) {
+    return res.status(429).json({ error: "Too many checks — slow down" });
+  }
+  let deep = req.query.deep !== "0" && req.query.deep !== "false";
+  deep = checkDeepAllowed(deep);
   const fresh = req.query.fresh === "1" || req.query.fresh === "true";
-  const risk = RISK_PROFILES[normalizeRisk(getSetting("riskTolerance", DEFAULT_RISK))];
-  return runCheck(req.params.sym, res, { deep, fresh, buyZoneScale: risk.buyZoneScale });
+  const risk = userRisk(req.user.id);
+  return runCheck(req.user.id, req.params.sym, res, {
+    deep,
+    fresh,
+    buyZoneScale: risk.buyZoneScale,
+  });
 });
 
 // Back-compat: original POST endpoint.
-app.post("/api/analyze", (req, res) => runCheck(req.body?.ticker, res, {}));
+app.post("/api/analyze", (req, res) => {
+  if (!rateLimit(`check:${req.user.id}:${clientIp(req)}`, { limit: 60, windowMs: 60_000 })) {
+    return res.status(429).json({ error: "Too many checks — slow down" });
+  }
+  const deep = checkDeepAllowed(true);
+  const risk = userRisk(req.user.id);
+  return runCheck(req.user.id, req.body?.ticker, res, {
+    deep,
+    buyZoneScale: risk.buyZoneScale,
+  });
+});
 
 // L1 macro gate — reads the latest cached snapshot instantly.
 app.get("/api/macro", (_req, res) => {
@@ -192,9 +317,9 @@ app.get("/api/macro", (_req, res) => {
 });
 
 // L2 scanner — reads the latest nightly ranking; gated OFF when DEFENSIVE.
-// When cached L3 analyst scores exist, blends them in (60/40) and flags
-// upgrades/downgrades.
-app.get("/api/scanner", async (_req, res) => {
+// When cached L3 analyst scores exist, blends them in using the caller's risk
+// quant weight and flags upgrades/downgrades.
+app.get("/api/scanner", async (req, res) => {
   const run = latestScanner();
   if (!run) return res.status(200).json({ data: null, asOf: null, stale: true });
   const age = Date.now() - new Date(run.computedAt).getTime();
@@ -202,7 +327,7 @@ app.get("/api/scanner", async (_req, res) => {
   let rows = run.rows;
   let blended = false;
   let summary = null;
-  const risk = RISK_PROFILES[normalizeRisk(getSetting("riskTolerance", DEFAULT_RISK))];
+  const risk = userRisk(req.user.id);
   const funds = latestFundamentalScores(run.rows.map((r) => r.ticker));
   if (Object.keys(funds).length) {
     const merged = blend(
@@ -266,27 +391,25 @@ app.get("/api/scanner", async (_req, res) => {
 });
 
 // ---------- watchlist ----------
-app.get("/api/watchlist", (_req, res) => res.json({ data: listWatchlist() }));
+app.get("/api/watchlist", (req, res) => res.json({ data: listWatchlist(req.user.id) }));
 
 // Quotes for the watched names (last close + daily change).
-app.get("/api/watchlist/quotes", async (_req, res) => {
+app.get("/api/watchlist/quotes", async (req, res) => {
   try {
-    const tickers = listWatchlist().map((w) => w.ticker);
+    const tickers = listWatchlist(req.user.id).map((w) => w.ticker);
     res.json({ data: await watchlistQuotes(tickers) });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "quotes failed" });
   }
 });
 
-// ---------- Market videos (YouTube RSS; user-configurable sources) ----------
-// Default source is CNBC Television; users add their own channels (Phase: video
-// sources). Sources live in settings as [{ channelId, label }].
+// ---------- Market videos (YouTube RSS; per-user sources) ----------
 const DEFAULT_VIDEO_SOURCES = [
   { channelId: "UCrp_UI8XtuYfpiqluWLD7Lw", label: "CNBC Television" },
 ];
 
-function getVideoSources() {
-  const s = getSetting("videoSources", null);
+function getVideoSources(userId) {
+  const s = getUserSetting(userId, "videoSources", null);
   return Array.isArray(s) ? s : DEFAULT_VIDEO_SOURCES;
 }
 
@@ -355,12 +478,13 @@ async function resolveChannelId(input) {
   }
 }
 
-let _videos = { at: 0, key: "", data: [] };
+/** Per-user video RSS cache: userId → { at, key, data }. */
+const videoCache = new Map();
 
-// Merge the latest videos across all configured sources, newest first.
-async function fetchAllVideos() {
+// Merge the latest videos across this user's sources, newest first.
+async function fetchAllVideos(userId) {
   const all = [];
-  for (const src of getVideoSources()) {
+  for (const src of getVideoSources(userId)) {
     try {
       for (const v of parseYtFeed(await fetchChannelFeed(src.channelId)).slice(0, 12)) {
         all.push({ ...v, source: src.label });
@@ -373,27 +497,34 @@ async function fetchAllVideos() {
   return all.slice(0, 24);
 }
 
+function clearUserVideoCache(userId) {
+  videoCache.delete(userId);
+}
+
 // Latest market videos across the configured sources. Cached ~5 min (keyed on
-// the source set); serves stale on upstream failure. `?force=1` bypasses cache.
+// user + source set); serves stale on upstream failure. `?force=1` bypasses cache.
 app.get("/api/news/videos", async (req, res) => {
   const now = Date.now();
   const force = req.query.force === "1" || req.query.force === "true";
-  const key = getVideoSources().map((s) => s.channelId).join(",");
-  if (!force && _videos.key === key && now - _videos.at < 5 * 60 * 1000 && _videos.data.length) {
-    return res.json({ data: _videos.data, cached: true });
+  const key = getVideoSources(req.user.id)
+    .map((s) => s.channelId)
+    .join(",");
+  const cached = videoCache.get(req.user.id);
+  if (!force && cached?.key === key && now - cached.at < 5 * 60 * 1000 && cached.data.length) {
+    return res.json({ data: cached.data, cached: true });
   }
   try {
-    const data = await fetchAllVideos();
-    if (data.length) _videos = { at: now, key, data };
+    const data = await fetchAllVideos(req.user.id);
+    if (data.length) videoCache.set(req.user.id, { at: now, key, data });
     res.json({ data });
   } catch (err) {
-    if (_videos.data.length) return res.json({ data: _videos.data, stale: true });
+    if (cached?.data?.length) return res.json({ data: cached.data, stale: true });
     res.status(502).json({ error: err instanceof Error ? err.message : "videos unavailable" });
   }
 });
 
-// ---------- video sources ----------
-app.get("/api/news/sources", (_req, res) => res.json({ data: getVideoSources() }));
+// ---------- video sources (per-user) ----------
+app.get("/api/news/sources", (req, res) => res.json({ data: getVideoSources(req.user.id) }));
 
 app.post("/api/news/sources", async (req, res) => {
   const channelId = await resolveChannelId(req.body?.url ?? req.body?.channelId);
@@ -402,7 +533,7 @@ app.post("/api/news/sources", async (req, res) => {
       error: "Couldn't find a YouTube channel there. Paste a channel URL, @handle, or channel ID.",
     });
   }
-  const sources = getVideoSources();
+  const sources = getVideoSources(req.user.id);
   if (sources.some((s) => s.channelId === channelId)) {
     return res.status(409).json({ error: "That channel is already a source." });
   }
@@ -415,15 +546,15 @@ app.post("/api/news/sources", async (req, res) => {
     }
   }
   const next = [...sources, { channelId, label }];
-  setSetting("videoSources", next);
-  _videos = { at: 0, key: "", data: [] };
+  setUserSetting(req.user.id, "videoSources", next);
+  clearUserVideoCache(req.user.id);
   res.json({ ok: true, data: next });
 });
 
 app.delete("/api/news/sources/:channelId", (req, res) => {
-  const next = getVideoSources().filter((s) => s.channelId !== req.params.channelId);
-  setSetting("videoSources", next);
-  _videos = { at: 0, key: "", data: [] };
+  const next = getVideoSources(req.user.id).filter((s) => s.channelId !== req.params.channelId);
+  setUserSetting(req.user.id, "videoSources", next);
+  clearUserVideoCache(req.user.id);
   res.json({ ok: true, data: next });
 });
 
@@ -433,9 +564,9 @@ const TAPE_INDEXES = [
   { ticker: "^IXIC", label: "Nasdaq" },
 ];
 
-// Ticker-tape feed: market indexes, then the watchlist, then the scanner's
-// current top-ranked names (deduped, watchlist wins), each tagged with source.
-app.get("/api/tape", async (_req, res) => {
+// Ticker-tape feed: market indexes, then this user's watchlist, then the
+// scanner's current top-ranked names (deduped, watchlist wins), each tagged.
+app.get("/api/tape", async (req, res) => {
   try {
     // Indexes (pinned first).
     const idxLabel = Object.fromEntries(TAPE_INDEXES.map((i) => [i.ticker, i.label]));
@@ -445,7 +576,7 @@ app.get("/api/tape", async (_req, res) => {
       source: "index",
     }));
 
-    const watchTickers = listWatchlist().map((w) => w.ticker);
+    const watchTickers = listWatchlist(req.user.id).map((w) => w.ticker);
     const items = (await watchlistQuotes(watchTickers)).map((q) => ({
       ...q,
       source: "watch",
@@ -496,17 +627,17 @@ app.get("/api/quotes", async (req, res) => {
 app.post("/api/watchlist", (req, res) => {
   const ticker = normSym(req.body?.ticker);
   if (!ticker) return res.status(400).json({ error: "ticker is required" });
-  addWatchlist(ticker);
-  res.json({ ok: true, data: listWatchlist() });
+  addWatchlist(req.user.id, ticker);
+  res.json({ ok: true, data: listWatchlist(req.user.id) });
 });
 
 app.delete("/api/watchlist/:sym", (req, res) => {
-  removeWatchlist(normSym(req.params.sym));
-  res.json({ ok: true, data: listWatchlist() });
+  removeWatchlist(req.user.id, normSym(req.params.sym));
+  res.json({ ok: true, data: listWatchlist(req.user.id) });
 });
 
 // ---------- alerts (buy-zone) ----------
-app.get("/api/alerts", (_req, res) => res.json({ data: listAlerts() }));
+app.get("/api/alerts", (req, res) => res.json({ data: listAlerts(req.user.id) }));
 
 app.post("/api/alerts", (req, res) => {
   const ticker = normSym(req.body?.ticker);
@@ -516,8 +647,8 @@ app.post("/api/alerts", (req, res) => {
   if (targetLow == null && targetHigh == null) {
     return res.status(400).json({ error: "a target price is required" });
   }
-  const alert = addAlert({ ticker, targetLow, targetHigh });
-  res.json({ ok: true, alert, data: listAlerts() });
+  const alert = addAlert(req.user.id, { ticker, targetLow, targetHigh });
+  res.json({ ok: true, alert, data: listAlerts(req.user.id) });
 });
 
 // Edit an existing alert's target(s) and re-arm it (alert management UI).
@@ -527,19 +658,20 @@ app.put("/api/alerts/:id", (req, res) => {
   if (targetLow == null && targetHigh == null) {
     return res.status(400).json({ error: "a target price is required" });
   }
-  updateAlert(Number(req.params.id), { targetLow, targetHigh });
-  res.json({ ok: true, data: listAlerts() });
+  updateAlert(req.user.id, Number(req.params.id), { targetLow, targetHigh });
+  res.json({ ok: true, data: listAlerts(req.user.id) });
 });
 
 app.delete("/api/alerts/:id", (req, res) => {
-  removeAlert(Number(req.params.id));
-  res.json({ ok: true, data: listAlerts() });
+  removeAlert(req.user.id, Number(req.params.id));
+  res.json({ ok: true, data: listAlerts(req.user.id) });
 });
 
-// ---------- settings (risk tolerance) ----------
-app.get("/api/settings", (_req, res) => {
+// ---------- settings (risk tolerance + alert email) ----------
+app.get("/api/settings", (req, res) => {
   res.json({
-    riskTolerance: normalizeRisk(getSetting("riskTolerance", DEFAULT_RISK)),
+    riskTolerance: normalizeRisk(getUserSetting(req.user.id, "riskTolerance", DEFAULT_RISK)),
+    alertEmail: req.user.alertEmail ?? null,
     riskProfiles: Object.fromEntries(
       Object.entries(RISK_PROFILES).map(([k, v]) => [k, { label: v.label }]),
     ),
@@ -548,18 +680,25 @@ app.get("/api/settings", (_req, res) => {
 
 app.put("/api/settings", (req, res) => {
   if (req.body?.riskTolerance != null) {
-    setSetting("riskTolerance", normalizeRisk(req.body.riskTolerance));
+    setUserSetting(req.user.id, "riskTolerance", normalizeRisk(req.body.riskTolerance));
+  }
+  let alertEmail = req.user.alertEmail ?? null;
+  if (req.body?.alertEmail !== undefined) {
+    const updated = updateUserProfile(req.user.id, { alertEmail: req.body.alertEmail });
+    alertEmail = updated?.alertEmail ?? null;
+    req.user.alertEmail = alertEmail;
   }
   res.json({
     ok: true,
-    riskTolerance: normalizeRisk(getSetting("riskTolerance", DEFAULT_RISK)),
+    riskTolerance: normalizeRisk(getUserSetting(req.user.id, "riskTolerance", DEFAULT_RISK)),
+    alertEmail,
   });
 });
 
 // ---------- watchlist buy-signals (Phase 2.2) ----------
 // Per-ticker last verdict + notification state for the "Watching to buy" panel.
-app.get("/api/watchlist/signals", async (_req, res) => {
-  const rows = listWatchlistVerdictState();
+app.get("/api/watchlist/signals", async (req, res) => {
+  const rows = listWatchlistVerdictState(req.user.id);
   const tickers = rows.map((r) => r.ticker);
   // resolveName covers the S&P 500; fill ADRs/ETFs/foreign names from the meta
   // cache, then fetch anything still missing once via the sidecar (and cache it).
@@ -588,8 +727,8 @@ app.get("/api/watchlist/signals", async (_req, res) => {
   });
 });
 
-// Run the daily watchlist scan now (instead of waiting for the cron).
-app.post("/api/watchlist/signals/check", async (_req, res) => {
+// Run the daily watchlist scan now (instead of waiting for the cron) — admin.
+app.post("/api/watchlist/signals/check", requireAdmin, async (_req, res) => {
   try {
     res.json({ ok: true, ...(await checkWatchlistSignals()) });
   } catch (err) {
@@ -628,9 +767,20 @@ async function holdingsPriceMap(tickers) {
   return out;
 }
 
-app.get("/api/holdings", async (_req, res) => {
+function requireHoldingsDek(req, res) {
+  if (!req.holdingsDek) {
+    res.status(401).json({
+      error: "Holdings key unavailable — sign out and sign in again to unlock your portfolio",
+    });
+    return false;
+  }
+  return true;
+}
+
+app.get("/api/holdings", async (req, res) => {
+  if (!requireHoldingsDek(req, res)) return;
   try {
-    const tickers = heldTickers();
+    const tickers = heldTickers(req.user.id, req.holdingsDek);
     const priceMap = await holdingsPriceMap(tickers);
     // Resolve company name + sector. resolveName/resolveSector cover the S&P 500
     // (scraped table + static map); fill the rest (ADRs, foreign names, ETFs)
@@ -655,7 +805,7 @@ app.get("/api/holdings", async (_req, res) => {
         }
       }
     }
-    const portfolio = rollupHoldings(priceMap, names, sectors);
+    const portfolio = rollupHoldings(req.user.id, priceMap, names, sectors, req.holdingsDek);
     const macro = latestMacro();
     res.json({
       data: portfolio,
@@ -671,7 +821,7 @@ app.get("/api/holdings", async (_req, res) => {
 // Preview an uploaded CSV → detected headers, sample rows, suggested mapping.
 app.post("/api/holdings/preview", (req, res) => {
   try {
-    res.json({ data: previewHoldingsCsv(String(req.body?.csv ?? "")) });
+    res.json({ data: previewHoldingsCsv(req.user.id, String(req.body?.csv ?? "")) });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : "preview failed" });
   }
@@ -679,11 +829,14 @@ app.post("/api/holdings/preview", (req, res) => {
 
 // Import positions (snapshot; replaces holdings wholesale) using a column mapping.
 app.post("/api/holdings/import", (req, res) => {
+  if (!requireHoldingsDek(req, res)) return;
   try {
     const summary = importHoldingsCsv(
+      req.user.id,
       String(req.body?.csv ?? ""),
       req.body?.mapping ?? {},
       req.body?.asOf ?? null,
+      req.holdingsDek,
     );
     res.json({ ok: true, ...summary });
   } catch (err) {
@@ -693,13 +846,12 @@ app.post("/api/holdings/import", (req, res) => {
 
 // Toggle a position's tax-advantaged flag (survives re-import) — Phase 3.3.
 app.post("/api/holdings/:ticker/tax", (req, res) => {
-  setHoldingFlag(normSym(req.params.ticker), !!req.body?.taxAdvantaged);
+  setHoldingFlag(req.user.id, normSym(req.params.ticker), !!req.body?.taxAdvantaged);
   res.json({ ok: true });
 });
 
-// ---------- Home Assistant (Phase 2.1) ----------
-// Compact state HA can poll for a passive dashboard tile.
-app.get("/api/ha/summary", (_req, res) => res.json(haSummary()));
+// ---------- Home Assistant (Phase 2.1) — admin ops tile ----------
+app.get("/api/ha/summary", requireAdmin, (_req, res) => res.json(haSummary()));
 
 // ---------- backtest report (Phase 4.4) ----------
 app.get("/api/backtest", async (req, res) => {
@@ -711,9 +863,8 @@ app.get("/api/backtest", async (req, res) => {
   }
 });
 
-// Run the alert check now (instead of waiting for the 10-min cron) — useful for
-// testing email delivery.
-app.post("/api/alerts/check", async (_req, res) => {
+// Run the alert check now (instead of waiting for the 10-min cron) — admin.
+app.post("/api/alerts/check", requireAdmin, async (_req, res) => {
   try {
     const result = await checkAlerts();
     res.json({ ok: true, ...result });
@@ -722,8 +873,8 @@ app.post("/api/alerts/check", async (_req, res) => {
   }
 });
 
-// Kick a background recompute; returns immediately.
-app.post("/api/refresh/:layer", (req, res) => {
+// Kick a background recompute; returns immediately — admin only.
+app.post("/api/refresh/:layer", requireAdmin, (req, res) => {
   const layer = req.params.layer;
   if (layer === "macro") {
     runMacro();
@@ -740,6 +891,13 @@ app.post("/api/refresh/:layer", (req, res) => {
   res.status(404).json({ error: `unknown layer "${layer}"` });
 });
 
+// ---------- admin: invite links ----------
+app.post("/api/admin/invites", requireAdmin, (req, res) => {
+  const days = Number(req.body?.days) || 14;
+  const invite = createInviteFor(req.user.id, { days });
+  res.json({ ok: true, ...invite });
+});
+
 if (staticDir) {
   app.use(express.static(staticDir));
   app.get(/^\/(?!api\/).*/, (_req, res) => {
@@ -750,8 +908,8 @@ if (staticDir) {
 app.listen(port, "0.0.0.0", () => {
   console.log(
     staticDir
-      ? `Stock Checker listening on http://0.0.0.0:${port} (UI + API)`
-      : `API listening on http://0.0.0.0:${port}`,
+      ? `Market Specialist listening on http://0.0.0.0:${port} (UI + API)`
+      : `Market Specialist listening on http://0.0.0.0:${port}`,
   );
   startScheduler();
 });

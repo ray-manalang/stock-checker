@@ -10,6 +10,85 @@ project is not versioned; commits are the unit of record.
 
 ---
 
+## 2026-08-16 — Invite-only multi-user
+
+Friends can share one instance (`https://sc.knr-manalang.net`) with isolated data.
+
+### Added
+
+- Session auth (username/password + invite registration); admin invite links
+- `user_id` on watchlist, alerts, holdings, recent checks, verdict state, video sources, risk
+- Holdings amount encryption at rest (per-user DEK unlocked at sign-in)
+- Rate limits, admin-only refresh/usage, daily Claude spend cap (`DAILY_LLM_BUDGET_USD`)
+- One-shot migration: existing personal rows attach to bootstrap admin (backup first)
+
+---
+
+## 2026-07-31 — Documentation re-audit (docs only, no code change)
+
+Full re-derivation of `README.md`, `ARCHITECTURE.md`, `CLAUDE.md`, and `DEPLOY-HAOS.md`
+from source at `main` @ `a311020`. No application code was touched. The recurring cause of
+drift was **Phase 4.1's risk-tolerance control**: `risk.js` reaches into both the blender
+weights and the buy-zone width at request time, and the docs still described the `balanced`
+profile's constants as if they were hardcoded.
+
+### Fixed (documentation)
+
+- **`SCANNER_UNIVERSE_SIZE` default was documented as `50` in three places** (README,
+  ARCHITECTURE's pacing note, DEPLOY-HAOS, CLAUDE.md). The real default is **`550`** — 50
+  only applies when `SCANNER_FULL_UNIVERSE=0`. DEPLOY-HAOS's troubleshooting row also told
+  you to set `SCANNER_FULL_UNIVERSE=1` "for the full S&P 500", which is already the default.
+- **The "60/40 blend" and the `0.88 → 0.95` buy zone** are the `balanced` profile only.
+  Documented the full risk-profile table and added an ARCHITECTURE *Risk tolerance* section
+  — including the caveat that `buyZoneScale` is discarded whenever a Claude analysis exists,
+  so half the control is inert on the default path.
+- **"The two market-clock jobs are pinned to `MARKET_TZ`" — there are three**; the
+  watchlist-signals job (weekdays 16:10 ET) was missing from CLAUDE.md's cadence list and
+  DEPLOY-HAOS's schedule table entirely.
+- **"Two additive column migrations" — there are three.** `company_names.sector` ships only
+  as an `ALTER TABLE`, not in that table's `CREATE TABLE`.
+- **The concurrency-guard claim was too broad.** `POST /api/alerts/check` and
+  `POST /api/watchlist/signals/check` call their workers directly and can overlap their crons.
+- **`fetchSeriesMulti` was documented as a fallback chain.** It has a fixture tier the doc
+  denied, and Twelve Data vs Yahoo spark are mutually exclusive branches — with a Twelve
+  Data key set, spark is unreachable and an outage returns `{}`.
+- **Stale design-system blockquote** claiming `index.html` still loads Google Fonts and that
+  `App.css` survives. Both were removed on 2026-07-25; the doc contradicted its own footnote.
+- **The verification claim was stale** — "68/68 server tests" is now **73/73**, and the
+  ARCHITECTURE baseline was still pinned to `53afb48` after the `a311020` docs pass.
+- Corrected the `/api/check/:sym` response (adds `dividendYield`), the `/api/scanner` row
+  shape (adds `sector` / `sectorRank`), the `/api/backtest` payload (adds `since`), the
+  `/api/watchlist/signals` name-resolution order (cache first, not S&P table first), the
+  `/api/news/videos` error contract (the documented 502 is unreachable; it returns
+  `200 { data: [] }`), and five undocumented DB columns.
+- Documented the `names` sidecar subcommand, which the doc referenced twice without listing.
+
+### Added (documentation)
+
+- **Known limitations**: every existing bullet re-verified as still true (none had been
+  silently fixed). New entries for `POST /api/analyze` ignoring the risk profile, the
+  unguarded manual triggers, the Put/Call signal's asymmetric map (a standing ≈ +1.25
+  risk-on tilt), currency handling being inconsistent in four ways rather than three, four
+  collapse flags not using the shared `useCollapsed` hook, `blendSummary()` /
+  `scoreFundamentals()` being dead, and `.env.example` omitting `STATIC_DIR` / `CORS_ORIGIN`.
+- Frontend coverage for things the docs never mentioned: the `RiskControl` segmented
+  control, the PWA service worker, `ClearableInput`, sector-relative ranks on scanner rows,
+  dividend yield, and the real scope of the Holdings page. Noted that **Holdings is
+  conditionally mounted** (it does not keep polling in the background like Home/Research).
+- DEPLOY-HAOS: the four Home-Assistant push variables (`HA_BASE_URL`, `HA_TOKEN`,
+  `HA_NOTIFY_SERVICE`, `APP_BASE_URL`) — previously undocumented in the HA deploy guide —
+  plus troubleshooting rows for Twelve Data pacing and stale service-worker assets.
+- ARCHITECTURE: an explicit *Documentation contract* section stating what must be updated
+  in the same commit as a code change.
+
+### Known gaps
+
+Nothing here was verified against the running Home Assistant container — neither the Cowork
+sandbox nor the device bridge can reach it. `npm run build` also could not be run (the
+`node_modules` rollup binary is darwin-arm64). `npm test` was run on the Mac: 73/73 pass.
+
+---
+
 ## 2026-07-27 — Watching-to-buy polish & Home declutter
 
 ### Added

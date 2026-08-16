@@ -17,6 +17,15 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       ALERT_EMAIL: ${ALERT_EMAIL:-}
       ALERT_FROM: ${ALERT_FROM:-Market Specialist <onboarding@resend.dev>}
+      # Public hostname (Cloudflare). Required for Secure cookies + invite links.
+      APP_BASE_URL: ${APP_BASE_URL:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      # First boot only — creates admin and migrates existing personal data onto them.
+      BOOTSTRAP_ADMIN_USER: ${BOOTSTRAP_ADMIN_USER:-}
+      BOOTSTRAP_ADMIN_PASS: ${BOOTSTRAP_ADMIN_PASS:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      DAILY_LLM_BUDGET_USD: ${DAILY_LLM_BUDGET_USD:-5}
       PORT: "3001"
       STATIC_DIR: /app/web/dist
       # Persist the SQLite store (watchlist, alerts, cached scores, usage) on a

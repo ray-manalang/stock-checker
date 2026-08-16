@@ -26,13 +26,30 @@ One container serves the React UI and Express API on port **3001** inside the co
    | `RESEND_API_KEY` | [Resend](https://resend.com) key — required to *email* buy-zone alerts |
    | `ALERT_EMAIL` | where alert emails go, e.g. `you@example.com` |
    | `ALERT_FROM` | sender header — defaults to `Market Specialist <onboarding@resend.dev>` |
-   | `MARKET_TZ` | market clock for the nightly jobs — defaults to `America/New_York` |
-   | `SCANNER_UNIVERSE_SIZE` | how many names the scanner ranks (default `50`) |
+   | `MARKET_TZ` | market clock for the scanner / analyst / watchlist-signal jobs — defaults to `America/New_York` |
+   | `SCANNER_UNIVERSE_SIZE` | how many names the scanner ranks — defaults to `550` (the full S&P 500), or `50` if you set `SCANNER_FULL_UNIVERSE=0` |
+   | `SCANNER_FULL_UNIVERSE` | **on by default.** Set `=0` to fall back to the curated ~100-name large-cap list |
+   | `APP_BASE_URL` | public URL, e.g. `https://sc.knr-manalang.net` (invite links + Secure cookies) |
+   | `CORS_ORIGIN` | same hostname, e.g. `https://sc.knr-manalang.net` |
+   | `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASS` | **first boot only** — creates the admin and migrates your existing watchlist/holdings/alerts onto that account |
+   | `DAILY_LLM_BUDGET_USD` | optional Claude spend cap per UTC day (default `5`) |
+   | `HA_BASE_URL` + `HA_TOKEN` | your Home Assistant URL and a long-lived access token — enables a push notification the day a watched ticker first turns into "Good time to buy" |
+   | `HA_NOTIFY_SERVICE` | which `notify.<service>` to call, e.g. `mobile_app_your_phone` (default `notify`) |
 
-   > **Alert email:** without `RESEND_API_KEY` **and** `ALERT_EMAIL` the alerts still
-   > fire and flip to *triggered* in the UI — they just don't send mail. With Resend's
-   > shared `onboarding@resend.dev` sender, delivery only works to your own Resend
-   > account address; verify a domain and change `ALERT_FROM` to send anywhere else.
+   > **Before upgrading to multi-user:** copy the SQLite file out of the
+   > `stock-checker-data` volume (rollback insurance). After deploy, sign in as
+   > the bootstrap admin and confirm your watchlist/holdings look the same.
+
+   > **Alert email:** each user sets their own address under **Your account** on
+   > Home. Without `RESEND_API_KEY` alerts still flip to *triggered* in the UI —
+   > they just don't send mail. With Resend's shared `onboarding@resend.dev`
+   > sender, delivery only works to your own Resend account address; verify a
+   > domain and change `ALERT_FROM` to send anywhere else.
+
+   > **Inviting friends:** add their email in **Cloudflare Access**, then use
+   > **Invite** in the app nav (admin) to copy an app invite link. Access is the
+   > network gate; the app login isolates each person's data. Admin cannot view
+   > another user's holdings.
 
 9. Deploy the stack. **The first build takes several minutes** — the image installs Python + pandas/numpy/yfinance in addition to Node (see notes below).
 10. Open the app: `http://<ha-ip>:8088` (e.g. `http://192.168.1.50:8088`).
@@ -79,15 +96,16 @@ Portainer → **Containers** → `stock-checker` → **Logs**. On boot you'll se
 
 ## Schedules
 
-The container clock is UTC, but the market-clock jobs are pinned to `MARKET_TZ`
+The container clock is UTC, but the three market-clock jobs are pinned to `MARKET_TZ`
 (default `America/New_York`), so they don't drift with daylight saving:
 
-| Job | When | What it refreshes |
-|---|---|---|
-| Macro gate | every 20 min | Market conditions card |
-| Scanner | 21:15 ET nightly | Top-ranked stocks |
-| Analyst | 03:00 ET Sundays | Claude fundamental scores (needs `ANTHROPIC_API_KEY`) |
-| Alerts | every 10 min | Buy-zone alert checks |
+| Job | When | Clock | What it refreshes |
+|---|---|---|---|
+| Macro gate | every 20 min | interval | Market conditions card |
+| Scanner | 21:15 nightly | **ET** | Top-ranked stocks |
+| Analyst | 03:00 Sundays | **ET** | Claude fundamental scores (needs `ANTHROPIC_API_KEY`) |
+| Alerts | every 10 min | interval | Buy-zone alert checks |
+| Watchlist signals | 16:10 weekdays | **ET** | Watching-to-buy verdicts + the HA buy-signal push |
 
 Macro and scanner also run once at boot when their tables are empty. Any layer can be
 recomputed on demand from the Home dashboard's Refresh buttons.
@@ -101,8 +119,10 @@ The named volume keeps your watchlist/alerts/cache across updates.
 
 ## Security notes
 
-- Never commit `ANTHROPIC_API_KEY` to Git — use Portainer env vars or a host-only `.env`.
-- The app is intended for **LAN use**. For external exposure, put it behind Home Assistant/nginx with authentication.
+- Never commit `ANTHROPIC_API_KEY` or `BOOTSTRAP_ADMIN_PASS` to Git — use Portainer env vars or a host-only `.env`.
+- The live instance at `https://sc.knr-manalang.net` sits behind **Cloudflare Access** plus **app login**. App sessions isolate personal data (watchlist, holdings, alerts, videos, risk). Holdings amounts are encrypted at rest with a per-user key unlocked at sign-in.
+- Admin is ops-only (invites, refresh, usage) — there is no admin view of another user's portfolio.
+- Before any multi-user upgrade: **back up** `/app/data/stock-checker.db` from the named volume.
 
 ## Troubleshooting
 
@@ -110,7 +130,9 @@ The named volume keeps your watchlist/alerts/cache across updates.
 |--------|-----|
 | Build fails / out of memory (Raspberry Pi) | The image now installs pandas/numpy/yfinance; on a low-RAM Pi build on another machine and push to GHCR, then set compose to `image:` instead of `build: .`. Requires a 64-bit (arm64/x86) host — 32-bit armv7 lacks the needed wheels. |
 | `llm: false` in health | Set `ANTHROPIC_API_KEY` in the stack env and redeploy (optional — the app works without it). |
-| Pro cards empty / scanner slow to fill | The scanner builds in the background on first boot; watch logs for `runScanner ok`, then refresh. Set `SCANNER_FULL_UNIVERSE=1` for the full S&P 500. |
+| Pro cards empty / scanner slow to fill | The scanner builds in the background on first boot; watch logs for `runScanner ok`, then refresh. It already ranks the full S&P 500 by default — if it's *too* slow, set `SCANNER_FULL_UNIVERSE=0` to drop to the curated ~100-name list. |
+| Scanner takes many minutes and you set `TWELVE_DATA_API_KEY` | Twelve Data's free tier is paced at 8 s **per symbol, serially** — 550 names is hours. It's a fallback for small symbol sets; the Python sidecar is the path that makes the full universe viable. Confirm the sidecar works (row below) rather than leaning on Twelve Data. |
+| UI looks stale/broken right after a redeploy | The app is a PWA with a service worker (`/sw.js`). Hard-reload (Cmd/Ctrl-Shift-R) to drop the cached assets. |
 | No market data | Confirm the sidecar works: `docker exec stock-checker /app/server/.venv/bin/python3 /app/server/scripts/yf_fetch.py chart AAPL 5d`. If it errors, set `TWELVE_DATA_API_KEY` as a fallback. |
 | Lost watchlist/alerts after redeploy | Ensure the `stock-checker-data` volume wasn't removed (`docker compose down` without `-v` keeps it; `-v` deletes it). |
 | Blank page | Check logs; confirm `STATIC_DIR` is set (default in compose). |

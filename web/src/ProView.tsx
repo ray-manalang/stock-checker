@@ -133,11 +133,13 @@ export function ProView({
   onToggleChangeMode,
   risk,
   onRiskChange,
+  canRefresh = false,
 }: {
   changeMode: ChangeMode;
   onToggleChangeMode: () => void;
   risk: RiskTolerance;
   onRiskChange: (r: RiskTolerance) => void;
+  canRefresh?: boolean;
 }) {
   const [macro, setMacro] = useState<Envelope<Macro> | null>(null);
   const [scanner, setScanner] = useState<ScannerEnv | null>(null);
@@ -266,7 +268,7 @@ export function ProView({
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {m && <span className={`pill ${ZONE_TONE[m.zone] ?? "accent"}`}>{m.zone}</span>}
-            <RefreshBtn onClick={() => refresh("macro")} busy={!!refreshing.macro} />
+            {canRefresh && <RefreshBtn onClick={() => refresh("macro")} busy={!!refreshing.macro} />}
           </div>
         </div>
         {!macroCollapsed && (
@@ -348,13 +350,17 @@ export function ProView({
             {rows.length > 0 && (
               <span className="subtitle">ranked {agoLabel(scanner?.asOf)}</span>
             )}
-            <RefreshBtn onClick={() => refresh("scanner")} busy={!!refreshing.scanner} />
-            <RefreshBtn
-              onClick={() => refresh("analyst")}
-              busy={!!refreshing.analyst}
-              label="Analyst"
-              title="Score fundamentals with Claude and blend into the ranking"
-            />
+            {canRefresh && (
+              <>
+                <RefreshBtn onClick={() => refresh("scanner")} busy={!!refreshing.scanner} />
+                <RefreshBtn
+                  onClick={() => refresh("analyst")}
+                  busy={!!refreshing.analyst}
+                  label="Analyst"
+                  title="Score fundamentals with Claude and blend into the ranking"
+                />
+              </>
+            )}
           </div>
         </div>
         {!collapsed && (

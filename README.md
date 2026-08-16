@@ -14,11 +14,12 @@ data, with a SQLite store for snapshots, watchlist, alerts, and cached scores.
 
 ---
 
-## Status — current as of 2026-07-27
+## Status — `main` @ `a311020`, re-audited 2026-07-31
 
 This documentation set tracks `main`; it describes what the code deploys, not a verified
 reading of the running Home Assistant container. See [CHANGELOG.md](CHANGELOG.md) for the
-history and [ARCHITECTURE.md](ARCHITECTURE.md) for the full technical reference.
+history and [ARCHITECTURE.md](ARCHITECTURE.md) for the full technical reference (including
+a maintained *Known limitations* list).
 
 ---
 
@@ -47,7 +48,10 @@ Three nav tabs — **Home**, **Research**, **Holdings** — plus a Hide $ toggle
   (`FULL DEPLOY` / `REDUCED` / `DEFENSIVE`) with position sizing
 - **Top-ranked stocks** — percentile-ranked quant scanner, gated by the macro zone,
   optionally blended with Claude's fundamental scores (shows quant-vs-analyst
-  disagreements as upgrades/downgrades)
+  disagreements as upgrades/downgrades) and each name's rank within its sector
+- **Risk tolerance** — a Conservative / Balanced / Aggressive control on that card that
+  shifts how much the ranking leans on fundamentals vs momentum (and, when Claude isn't
+  answering, how deep a pullback the suggested buy zone waits for)
 - **Market videos** — a scrollable grid of market video, playable in-app, with custom
   YouTube sources you can add or remove
 
@@ -99,7 +103,8 @@ Open <http://localhost:5173> and check a ticker (e.g. `AAPL`).
 Other commands:
 
 ```bash
-npm test          # server unit tests (node --test) — indicators, verdict, factors, signals, blender, alerts, spark
+npm test          # 73 server unit tests (node --test) — indicators, verdict, factors,
+                  # signals, blender, alerts, spark, holdings, risk, sp500-table
 npm run typecheck # web: tsc --noEmit
 npm run build     # builds web/dist
 npm start         # serves API + static UI on PORT (default 3001)
@@ -128,7 +133,7 @@ Portainer stack in production). Full table with defaults and effects is in
 | `YF_PYTHON` | `python3` | Python interpreter that has `yfinance` — **the primary data path** |
 | `ANTHROPIC_API_KEY` | unset | Enables the Claude deep-dive and the analyst layer |
 | `TWELVE_DATA_API_KEY` | unset | Fallback data source when the sidecar is unavailable |
-| `SCANNER_UNIVERSE_SIZE` | `50` | How many names the scanner ranks |
+| `SCANNER_UNIVERSE_SIZE` | `550` | How many names the scanner ranks (`550` on the default full S&P 500; `50` when `SCANNER_FULL_UNIVERSE=0` forces the curated list) |
 | `RESEND_API_KEY` + `ALERT_EMAIL` | unset | Sends buy-zone alert emails |
 | `STOCK_FIXTURES` | unset | `=1` serves deterministic demo data end to end |
 
@@ -168,6 +173,11 @@ server/
     verdict.js          Deterministic verdict when Claude is unavailable
     llm.js              Claude clients, schemas, pricing, usage accounting
     alerts.js           Buy-zone alert checks + Resend email
+    risk.js             Risk profiles — blend weight + buy-zone width
+    holdings.js         Brokerage CSV parsing, mapping, position roll-up
+    backtest.js         Verdict hit-rate grading behind "Track record"
+    watchlistSignals.js Daily watchlist scan + Home Assistant push
+    notify.js           HA notification + /api/ha/summary payload
     fixtures.js         Offline demo data
     macro/              L1 — 6 signals + composite + zone
     scanner/            L2 — universe, factors, percentile ranking
@@ -185,7 +195,9 @@ web/
     TickerTape.tsx      Fixed scrolling footer
     CnbcVideos.tsx      Market videos card (multi-source YouTube grid)
     livePrices.ts       Shared 60s live-price store (refcounted, deduped)
-    lib/glossary.ts     Single source of every ⓘ explanation
+    components/         InfoTip, PriceChart, ClearableInput, RiskControl
+    lib/glossary.ts     Single source of ⓘ copy (18 entries; analyst dimensions
+                        and dividend yield are the two exceptions)
     lib/useCollapsed.ts Per-card collapse state (localStorage-backed)
     index.css           Design tokens + all layout (ported from Minset)
 01 - … 05 - *.js        Legacy Google Apps Script prototype (not part of the app)

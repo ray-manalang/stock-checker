@@ -1339,3 +1339,86 @@ body:has(.tape) .page {
 }
 .vsrc-add input::placeholder { color: var(--text-3); }
 .vsrc-add input:focus { border-color: var(--hairline); }
+
+/* Auth gate */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--radius);
+  padding: 28px 24px 22px;
+}
+.auth-brand { font-size: 22px; margin-bottom: 8px; }
+.auth-lead { color: var(--text-2); margin: 0 0 20px; font-size: 15px; }
+.auth-form { display: flex; flex-direction: column; gap: 14px; }
+.auth-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-2); }
+.auth-field input {
+  background: var(--surface-2);
+  border: 1px solid var(--hairline-soft);
+  border-radius: 12px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 16px;
+  outline: none;
+}
+.auth-field input:focus { border-color: var(--hairline); }
+.auth-error { color: var(--down); margin: 0; font-size: 14px; }
+.auth-switch {
+  margin-top: 16px;
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 13px;
+  text-decoration: underline;
+  padding: 0;
+}
+.auth-switch:hover { color: var(--text-2); }
+.pill-btn {
+  background: var(--pill);
+  color: var(--pill-text);
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-weight: 600;
+  font-size: 15px;
+}
+.pill-btn:disabled { opacity: 0.5; cursor: default; }
+.nav-user {
+  color: var(--text-3);
+  font-size: 13px;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.invite-banner {
+  margin: 0 auto 12px;
+  max-width: var(--maxw);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-2);
+  background: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--hairline-soft);
+  word-break: break-all;
+}
+.account-card { margin-top: 18px; padding: 16px 18px; }
+.account-row { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.account-row input {
+  flex: 1;
+  min-width: 180px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline-soft);
+  border-radius: 12px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 15px;
+}

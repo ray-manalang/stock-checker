@@ -18,8 +18,8 @@ import {
   replaceHoldings,
   listHoldingsRaw,
   holdingsFlags,
-  getSetting,
-  setSetting,
+  getUserSetting,
+  setUserSetting,
 } from "./db.js";
 import { resolveName, resolveSector } from "./scanner/universe.js";
 
@@ -133,9 +133,9 @@ function toNumber(v) {
 // ---------- import ----------
 /** Preview a CSV: headers, a few sample rows, and a suggested mapping (merged
  *  with any remembered mapping). No DB writes. */
-export function previewHoldingsCsv(csv) {
+export function previewHoldingsCsv(userId, csv) {
   const { headers, rows } = parseCsv(csv);
-  const saved = getSetting("holdingsMapping", null);
+  const saved = getUserSetting(userId, "holdingsMapping", null);
   const suggested = suggestMapping(headers);
   return {
     headers,
@@ -147,8 +147,8 @@ export function previewHoldingsCsv(csv) {
 
 /** Apply a mapping to a CSV and replace holdings wholesale. Returns a summary
  *  ({ imported, positions, skipped, skippedSymbols, asOf }). Remembers the
- *  mapping for next time. */
-export function importHoldingsCsv(csv, mapping, asOf) {
+ *  mapping for next time. Pass dek to encrypt amounts at rest. */
+export function importHoldingsCsv(userId, csv, mapping, asOf, dek = null) {
   const { rows } = parseCsv(csv);
   if (!mapping?.ticker || !mapping?.shares) {
     throw new Error("mapping must include at least ticker and shares columns");
@@ -176,14 +176,14 @@ export function importHoldingsCsv(csv, mapping, asOf) {
     const source = (mapping.source && r[mapping.source]?.trim()) || "Imported";
     out.push({ ticker, shares, costBasis, source });
   }
-  const at = replaceHoldings(out, asOf);
-  setSetting("holdingsMapping", { ...mapping });
+  const at = replaceHoldings(userId, out, asOf, dek);
+  setUserSetting(userId, "holdingsMapping", { ...mapping });
   return {
     imported: out.length,
     positions: new Set(out.map((r) => r.ticker)).size,
     skipped,
     skippedSymbols: [...new Set(skippedSymbols)].slice(0, 20),
-    asOf: getSetting("holdingsAsOf", at),
+    asOf: getUserSetting(userId, "holdingsAsOf", at),
   };
 }
 
@@ -337,15 +337,15 @@ function fmtLoss(gainLoss) {
 // ---------- entry point used by the route ----------
 /** Read holdings and return the built portfolio. `priceMap` and `names` are
  *  supplied by the caller (index.js gathers prices + names via the shared cache). */
-export function rollupHoldings(priceMap, names = {}, sectors = {}) {
-  return buildPortfolio(listHoldingsRaw(), holdingsFlags(), priceMap, {
-    asOf: getSetting("holdingsAsOf", null),
+export function rollupHoldings(userId, priceMap, names = {}, sectors = {}, dek = null) {
+  return buildPortfolio(listHoldingsRaw(userId, dek), holdingsFlags(userId), priceMap, {
+    asOf: getUserSetting(userId, "holdingsAsOf", null),
     names,
     sectors,
   });
 }
 
 /** Unique tradable tickers currently held — for price fetching. */
-export function heldTickers() {
-  return [...new Set(listHoldingsRaw().map((r) => r.ticker))];
+export function heldTickers(userId, dek = null) {
+  return [...new Set(listHoldingsRaw(userId, dek).map((r) => r.ticker))];
 }
