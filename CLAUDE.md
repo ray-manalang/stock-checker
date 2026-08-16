@@ -101,7 +101,7 @@ A `?check=SYM` query param opens Research on that ticker
 refcounted 60s poller every price on screen subscribes to — add new price displays there
 rather than polling separately. Components in `web/src/components/` (`InfoTip`,
 `PriceChart`, `ClearableInput`, `RiskControl`, `SupportButton`); design tokens in `web/src/index.css` — the
-only stylesheet in the tree; plain-language copy in `web/src/lib/glossary.ts` (18 entries —
+only stylesheet in the tree; plain-language copy in `web/src/lib/glossary.ts` (19 entries —
 the two exceptions are `DIM_INFO` in `ProView.tsx` and the dividend-yield tip inline in
 `App.tsx`). The app is a PWA: `index.html` registers `/sw.js`, so a stale service worker can
 serve old assets after a redeploy.

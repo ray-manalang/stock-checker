@@ -20,8 +20,13 @@ server.
 | **Profile** | Alert email, password, Claude usage, delete account |
 | **Guide** | This documentation, in-app |
 
-**Hide $** in the nav blurs dollar amounts. Open `?check=AAPL` (or tap a tape
-symbol) to jump into Research for that ticker.
+**Hide $** in the nav blurs dollar amounts. Open `?check=AAPL` to jump into Research
+for that ticker.
+
+**Ticker tape (footer marquee)** — major indexes, then your watchlist (★), then up to
+20 top-ranked scanner names. Names you’ve recently checked in Research but haven’t
+added to the watchlist are left off so one-off lookups don’t clutter the strip. Tap a
+symbol for Yahoo Finance; use %/$ to match the rest of the app.
 
 ---
 
@@ -33,7 +38,13 @@ the latest cache and shows freshness.
 - **Market conditions** — six macro signals → composite → zone (`FULL DEPLOY` /
   `REDUCED` / `DEFENSIVE`). The zone gates how aggressive the scanner list is.
 - **Top-ranked stocks** — quant ranking over a large US universe, optionally
-  blended with Claude fundamentals. Tap a name to open Research.
+  blended with Claude fundamentals. The list shows every current candidate (same
+  count as Candidates). Tap a name to open Research.
+- **Quant vs analyst disagreements** — when fundamentals are blended in, names
+  whose blended rank moves **3+ spots** vs pure momentum are flagged as upgrades
+  or downgrades. An **upgrade** means the business looks stronger than the chart
+  alone; a **downgrade** means momentum may be ahead of fundamentals. Use them as
+  a second look, not an automatic trade.
 - **Risk tolerance** (Conservative / Balanced / Aggressive) — shifts how much
   rankings lean on fundamentals vs momentum, and (when there’s no Claude buy zone)
   how wide the suggested buy zone is.

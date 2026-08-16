@@ -57,8 +57,15 @@ export function GuidePage({ usage }: Props) {
         </ul>
         <p>
           Use <strong>Hide $</strong> in the nav to blur dollar amounts on screen (handy when
-          sharing your display). Tap a ticker on the footer tape or open{" "}
-          <code>?check=AAPL</code> to jump straight into Research for that symbol.
+          sharing your display). Open <code>?check=AAPL</code> to jump straight into Research
+          for that symbol.
+        </p>
+        <p>
+          <strong>Ticker tape (footer marquee)</strong> — always shows major indexes, then
+          your watchlist (★), then up to 20 top-ranked scanner names. Names you’ve recently
+          checked in Research but <em>haven’t</em> added to the watchlist are left off the
+          marquee so one-off lookups don’t clutter it. Tap a symbol to open it on Yahoo
+          Finance; use the %/$ control to match the rest of the app.
         </p>
       </section>
 
@@ -76,7 +83,15 @@ export function GuidePage({ usage }: Props) {
           </li>
           <li>
             <strong>Top-ranked stocks</strong> — quant ranking across a large US universe,
-            optionally blended with Claude fundamentals. Tap a name to open it in Research.
+            optionally blended with Claude fundamentals. The list shows every current
+            candidate (same count as Candidates). Tap a name to open it in Research.
+          </li>
+          <li>
+            <strong>Quant vs analyst disagreements</strong> — when Claude fundamentals are
+            blended in, names whose blended rank moves 3+ spots vs pure momentum are flagged
+            as upgrades or downgrades. An upgrade means the business looks stronger than the
+            chart alone; a downgrade means momentum may be ahead of fundamentals. Treat them
+            as a second look, not an automatic trade.
           </li>
           <li>
             <strong>Risk tolerance</strong> (Conservative / Balanced / Aggressive) — changes

@@ -198,7 +198,7 @@ web/
     CnbcVideos.tsx      Market videos card (multi-source YouTube grid)
     livePrices.ts       Shared 60s live-price store (refcounted, deduped)
     components/         InfoTip, PriceChart, ClearableInput, RiskControl
-    lib/glossary.ts     Single source of ⓘ copy (18 entries; analyst dimensions
+    lib/glossary.ts     Single source of ⓘ copy (19 entries; analyst dimensions
                         and dividend yield are the two exceptions)
     lib/useCollapsed.ts Per-card collapse state (localStorage-backed)
     index.css           Design tokens + all layout (ported from Minset)

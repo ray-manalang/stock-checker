@@ -76,4 +76,9 @@ export const GLOSSARY: Record<string, { title: string; text: string }> = {
     title: "Factor Crowding",
     text: "How tightly investing styles (momentum, value, quality…) are moving together. Heavy crowding is fragile and scores low.",
   },
+
+  disagreements: {
+    title: "Quant vs analyst disagreements",
+    text: "Names where the blended rank (price momentum + Claude’s fundamental score) differs from the pure quant rank by 3 or more spots. An upgrade means fundamentals lifted it vs momentum alone — the business may look stronger than the chart suggests. A downgrade means fundamentals pulled it down — momentum may be running ahead of the business. Use these as a second look, not a buy/sell order.",
+  },
 };

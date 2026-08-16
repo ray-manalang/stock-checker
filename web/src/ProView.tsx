@@ -408,7 +408,12 @@ export function ProView({
                   className="subtitle"
                   style={{ marginBottom: 8, color: "var(--text-2)" }}
                 >
-                  Quant vs analyst disagreements (rank shift ≥ 3)
+                  Quant vs analyst disagreements (rank shift ≥ 3){" "}
+                  <InfoTip
+                    title={GLOSSARY.disagreements.title}
+                    text={GLOSSARY.disagreements.text}
+                    label="quant vs analyst disagreements"
+                  />
                 </div>
                 <div style={{ display: "flex", gap: 20, flexWrap: "wrap", fontSize: 13 }}>
                   <Disagreement rows={upgrades} tone="up" arrow="▲" empty="No upgrades" />
