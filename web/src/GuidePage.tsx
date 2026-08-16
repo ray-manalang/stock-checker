@@ -14,7 +14,7 @@ export function GuidePage({ usage }: Props) {
       <header className="profile-hero">
         <h2>User guide</h2>
         <p className="subtitle">
-          How to use Market Specialist — Home, Research, Holdings, alerts, and Claude
+          How to use Market Specialist: Home, Research, Holdings, alerts, and Claude
           deep-dives.
         </p>
       </header>
@@ -39,19 +39,19 @@ export function GuidePage({ usage }: Props) {
         </p>
         <ul>
           <li>
-            <strong>Home</strong> — market conditions, top-ranked names, market videos, and a
+            <strong>Home:</strong> market conditions, top-ranked names, market videos, and a
             peek at your holdings.
           </li>
           <li>
-            <strong>Research</strong> — type a ticker, get a verdict, manage your watchlist and
+            <strong>Research:</strong> type a ticker, get a verdict, manage your watchlist and
             price alerts.
           </li>
           <li>
-            <strong>Holdings</strong> — import brokerage CSVs and see gain/loss and
-            concentration.
+            <strong>Holdings:</strong> import brokerage CSVs and see gain/loss and
+            concentration. Only you can see your portfolio (not even the admin).
           </li>
           <li>
-            <strong>Profile</strong> — alert email, password, Claude usage, and account
+            <strong>Profile:</strong> alert email, password, Claude usage, and account
             deletion.
           </li>
         </ul>
@@ -61,7 +61,7 @@ export function GuidePage({ usage }: Props) {
           for that symbol.
         </p>
         <p>
-          <strong>Ticker tape (footer marquee)</strong> — always shows major indexes, then
+          <strong>Ticker tape (footer marquee):</strong> always shows major indexes, then
           your watchlist (★), then up to 20 top-ranked scanner names. Names you’ve recently
           checked in Research but <em>haven’t</em> added to the watchlist are left off the
           marquee so one-off lookups don’t clutter it. Tap a symbol to open it on Yahoo
@@ -77,29 +77,29 @@ export function GuidePage({ usage }: Props) {
         </p>
         <ul>
           <li>
-            <strong>Market conditions</strong> — six macro signals roll into a score and a
+            <strong>Market conditions:</strong> six macro signals roll into a score and a
             zone: FULL DEPLOY, REDUCED, or DEFENSIVE. That zone gates how aggressive the
             scanner list is.
           </li>
           <li>
-            <strong>Top-ranked stocks</strong> — quant ranking across a large US universe,
+            <strong>Top-ranked stocks:</strong> quant ranking across a large US universe,
             optionally blended with Claude fundamentals. The list shows every current
             candidate (same count as Candidates). Tap a name to open it in Research.
           </li>
           <li>
-            <strong>Quant vs analyst disagreements</strong> — when Claude fundamentals are
+            <strong>Quant vs analyst disagreements:</strong> when Claude fundamentals are
             blended in, names whose blended rank moves 3+ spots vs pure momentum are flagged
             as upgrades or downgrades. An upgrade means the business looks stronger than the
             chart alone; a downgrade means momentum may be ahead of fundamentals. Treat them
             as a second look, not an automatic trade.
           </li>
           <li>
-            <strong>Risk tolerance</strong> (Conservative / Balanced / Aggressive) — changes
+            <strong>Risk tolerance</strong> (Conservative / Balanced / Aggressive): changes
             how much rankings lean on fundamentals vs momentum, and (when there’s no Claude
             buy zone) how wide the suggested buy zone is.
           </li>
           <li>
-            <strong>Market videos</strong> — YouTube clips from sources you can add or remove
+            <strong>Market videos:</strong> YouTube clips from sources you can add or remove
             (managed on Home).
           </li>
         </ul>
@@ -122,22 +122,22 @@ export function GuidePage({ usage }: Props) {
           </li>
           <li>At-a-glance Timing / Quality / Price</li>
           <li>
-            “Why this call?” — in its favor, watch outs, and a plan. Expand details for the
+            “Why this call?”: in its favor, watch outs, and a plan. Expand details for the
             chart, buy zone, and technicals.
           </li>
         </ul>
         <p>
-          <strong>Watchlist</strong> — star a name or add chips under the search box.{" "}
+          <strong>Watchlist:</strong> star a name or add chips under the search box.{" "}
           <strong>Watching to buy</strong> surfaces watched names with their latest verdict
           and can notify the day one first becomes “Good time to buy.”
         </p>
         <p>
-          <strong>Your alerts</strong> — set a buy-zone style price alert from the answer
+          <strong>Your alerts:</strong> set a buy-zone style price alert from the answer
           card; emails go to the address on your Profile (if email is configured on the
           server).
         </p>
         <p>
-          <strong>Track record</strong> — how past verdicts scored, at the bottom of Research.
+          <strong>Track record:</strong> how past verdicts scored, at the bottom of Research.
         </p>
         <p>
           Tap ⓘ anywhere for plain-language definitions. Recents reopen a prior check from
@@ -153,8 +153,8 @@ export function GuidePage({ usage }: Props) {
           sector mix. Share counts and cost basis are encrypted at rest for your account.
         </p>
         <p>
-          Holdings are private to you — other people on this server cannot see your
-          portfolio. Admins also cannot browse friends’ holdings from the app.
+          Your holdings are visible only to you. Other people on this server cannot see them,
+          and neither can the admin. There is no admin view of friends’ portfolios.
         </p>
       </section>
 
@@ -162,17 +162,17 @@ export function GuidePage({ usage }: Props) {
         <h3>Profile</h3>
         <ul>
           <li>
-            <strong>Alert email</strong> — where buy-zone emails are sent (optional).
+            <strong>Alert email:</strong> where buy-zone emails are sent (optional).
           </li>
           <li>
-            <strong>Password</strong> — change anytime; you’ll need the current password.
+            <strong>Password:</strong> change anytime; you’ll need the current password.
           </li>
           <li>
-            <strong>Claude usage</strong> — your attributed deep-dive spend (today and this
+            <strong>Claude usage:</strong> your attributed deep-dive spend (today and this
             month), plus the shared daily budget for the whole site.
           </li>
           <li>
-            <strong>Delete account</strong> — permanently removes your personal data from
+            <strong>Delete account:</strong> permanently removes your personal data from
             this server. Shared market data stays.
           </li>
         </ul>
@@ -200,7 +200,7 @@ export function GuidePage({ usage }: Props) {
               <p className="guide-budget-ok">Deep-dives are available right now.</p>
             ) : (
               <p className="guide-budget-hit">
-                Daily budget reached — new deep-dives are paused until tomorrow (UTC). Checks
+                Daily budget reached. New deep-dives are paused until tomorrow (UTC). Checks
                 still work with the numbers-only verdict.
               </p>
             )}
@@ -218,7 +218,7 @@ export function GuidePage({ usage }: Props) {
         <h3>Tip jar (LLM costs)</h3>
         <p>
           The app is free for invited friends. Each Claude answer costs a little real money.
-          Tips are optional and never unlock features — they just help keep deep-dives
+          Tips are optional and never unlock features. They just help keep deep-dives
           funded when the shared daily budget runs out.
         </p>
         {support?.url ? (

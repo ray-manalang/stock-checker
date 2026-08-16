@@ -9,7 +9,7 @@ type Props = {
 export function SupportButton({
   url,
   label = "Chip in for LLM costs",
-  tooltip = "Tips help cover Claude usage. Optional — nothing is gated behind this.",
+  tooltip = "Tips help cover Claude usage. Optional: nothing is gated behind this.",
   className = "",
 }: Props) {
   if (!url) return null;

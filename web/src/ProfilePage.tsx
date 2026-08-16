@@ -176,7 +176,7 @@ export function ProfilePage({ user, onUser, onDeleted }: Props) {
         <section className="insight-card profile-card">
           <h3>Tip jar</h3>
           <p className="subtitle">
-            Optional — help cover Claude costs. Nothing is gated behind tips.
+            Optional. Help cover Claude costs. Nothing is gated behind tips.
           </p>
           <div className="guide-tip-row" style={{ marginTop: 12 }}>
             <SupportButton

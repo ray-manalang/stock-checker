@@ -161,7 +161,7 @@ app.get("/api/health", (_req, res) => {
 
 app.post("/api/auth/login", (req, res) => {
   if (!rateLimit(`login:${clientIp(req)}`, { limit: 20, windowMs: 15 * 60 * 1000 })) {
-    return res.status(429).json({ error: "Too many login attempts — try again later" });
+    return res.status(429).json({ error: "Too many login attempts. Try again later" });
   }
   const result = login(req.body?.username, req.body?.password);
   if (result.error) return res.status(result.status || 401).json({ error: result.error });
@@ -302,7 +302,7 @@ app.get("/api/checks", (req, res) => res.json({ data: recentChecks(req.user.id) 
 // Over daily spend budget, deep is forced off.
 app.get("/api/check/:sym", (req, res) => {
   if (!rateLimit(`check:${req.user.id}:${clientIp(req)}`, { limit: 60, windowMs: 60_000 })) {
-    return res.status(429).json({ error: "Too many checks — slow down" });
+    return res.status(429).json({ error: "Too many checks. Slow down" });
   }
   let deep = req.query.deep !== "0" && req.query.deep !== "false";
   deep = checkDeepAllowed(deep);
@@ -318,7 +318,7 @@ app.get("/api/check/:sym", (req, res) => {
 // Back-compat: original POST endpoint.
 app.post("/api/analyze", (req, res) => {
   if (!rateLimit(`check:${req.user.id}:${clientIp(req)}`, { limit: 60, windowMs: 60_000 })) {
-    return res.status(429).json({ error: "Too many checks — slow down" });
+    return res.status(429).json({ error: "Too many checks. Slow down" });
   }
   const deep = checkDeepAllowed(true);
   const risk = userRisk(req.user.id);
@@ -833,7 +833,7 @@ async function holdingsPriceMap(tickers) {
 function requireHoldingsDek(req, res) {
   if (!req.holdingsDek) {
     res.status(401).json({
-      error: "Holdings key unavailable — sign out and sign in again to unlock your portfolio",
+      error: "Holdings key unavailable. Sign out and sign in again to unlock your portfolio",
     });
     return false;
   }

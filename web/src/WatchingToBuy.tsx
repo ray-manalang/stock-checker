@@ -53,8 +53,8 @@ export function WatchingToBuy({ onOpen }: { onOpen: (ticker: string) => void }) 
       {!collapsed && (
       <>
       <div className="caption">
-        Notifies only the day a verdict first turns into "Good time to buy" — not every day it
-        stays one — and only while market conditions currently allow new positions.
+        Notifies only the day a verdict first turns into "Good time to buy", not every day it
+        stays one, and only while market conditions currently allow new positions.
       </div>
       {signals.map((s) => {
         const isBuy = s.lastVerdict === "BUY";
@@ -101,7 +101,7 @@ export function WatchingToBuy({ onOpen }: { onOpen: (ticker: string) => void }) 
         );
       })}
       <div className="insight-foot">
-        Reuses your existing watchlist — nothing new to add. A ticker can sit here and in Holdings
+        Reuses your existing watchlist. Nothing new to add. A ticker can sit here and in Holdings
         at once.
       </div>
       </>

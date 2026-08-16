@@ -50,7 +50,7 @@ function liveNotes(p: {
   if (loss && p.taxAdvantaged) {
     notes.push({
       kind: "muted",
-      text: `Down ${fmtAbs(p.gainLoss!)}, but held in a tax-advantaged account — those aren't harvest-eligible, so no tax-loss note here.`,
+      text: `Down ${fmtAbs(p.gainLoss!)}, but held in a tax-advantaged account. Those aren't harvest-eligible, so no tax-loss note here.`,
     });
   } else if (loss) {
     notes.push({
@@ -219,6 +219,10 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
               ? `Rolled up across ${portfolio.sources.join(" + ")} · as of ${asOfLabel(portfolio.asOf)}`
               : "Import a positions CSV to get started."}
           </div>
+          <p className="subtitle" style={{ marginTop: 8, maxWidth: 520 }}>
+            Visible only to you. Other users and the admin cannot see your portfolio.
+            Share counts and cost basis are encrypted at rest.
+          </p>
         </div>
         <button
           className="btn-ghost btn-sm"
@@ -367,7 +371,7 @@ export function HoldingsPage({ onBack }: { onBack: () => void }) {
           <div style={{ padding: "8px 8px 16px" }}>
             <div className="insight-foot" style={{ padding: "8px 10px 4px", textAlign: "left" }}>
               {ready
-                ? "No holdings yet. Import a positions CSV from your brokerage — format below."
+                ? "No holdings yet. Import a positions CSV from your brokerage (format below)."
                 : "Loading…"}
             </div>
             {ready && <CsvFormatHelp defaultOpen />}
@@ -531,7 +535,7 @@ function Position({
           <span>◆</span>
           <span className="txt">
             {n.title && <b>{n.title}</b>}
-            {n.title ? " — " : ""}
+            {n.title ? ": " : ""}
             {n.text}
           </span>
         </div>
@@ -543,7 +547,7 @@ function Position({
           checked={p.taxAdvantaged}
           onChange={(e) => onToggleTax(p.ticker, e.target.checked)}
         />
-        Tax-advantaged account (IRA/401k) — suppresses tax-loss notes
+        Tax-advantaged account (IRA/401k): suppresses tax-loss notes
       </label>
     </div>
   );
@@ -632,7 +636,8 @@ function ImportPanel({
       </div>
       <div className="insight-foot" style={{ marginTop: 0 }}>
         Drop your aggregated positions CSV (one file across all brokerages). Re-importing replaces
-        your holdings — it's a snapshot, not a running log. Nothing leaves this server.
+        your holdings. It's a snapshot, not a running log. Nothing leaves this server.
+        Your positions stay private to you (not visible to other users or the admin).
       </div>
 
       <CsvFormatHelp defaultOpen />

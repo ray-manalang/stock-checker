@@ -198,7 +198,7 @@ export function CnbcVideos() {
       ) : (
         <div className="insight-foot" style={{ padding: "16px 18px", textAlign: "left" }}>
           {sources.length
-            ? "No videos yet — try Refresh."
+            ? "No videos yet. Try Refresh."
             : "No video sources. Open Sources to add a YouTube channel."}
         </div>
       )}

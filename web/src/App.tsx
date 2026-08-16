@@ -324,7 +324,7 @@ export default function App({ user, onLogout, onUser }: AppProps) {
       <div className="check-col" style={{ display: view === "research" ? undefined : "none" }}>
       {usage?.budget && !usage.budget.deepAllowed && (
         <p className="budget-banner" role="status">
-          Shared daily Claude budget (${usage.budget.dailyUsd.toFixed(2)}) reached — new
+          Shared daily Claude budget (${usage.budget.dailyUsd.toFixed(2)}) reached. New
           deep-dives are paused until tomorrow (UTC). Numbers-only checks still work.
           {usage.support?.url && (
             <>
@@ -349,7 +349,7 @@ export default function App({ user, onLogout, onUser }: AppProps) {
           value={ticker}
           onChange={(e) => setTicker(e.target.value.toUpperCase())}
           onClear={() => setTicker("")}
-          placeholder="Type a ticker — AAPL"
+          placeholder="Type a ticker (AAPL)"
           autoComplete="off"
           spellCheck={false}
           disabled={loading}
@@ -584,7 +584,7 @@ function AnswerCard({
     const price = Number(alertPrice);
     if (!Number.isFinite(price) || price <= 0) return;
     const ok = await onCreateAlert(price);
-    setAlertMsg(ok ? `Alert set — we'll flag ${quote.ticker} at $${price}.` : "Couldn't set alert.");
+    setAlertMsg(ok ? `Alert set. We'll flag ${quote.ticker} at $${price}.` : "Couldn't set alert.");
     if (ok) setAlertOpen(false);
   }
 
@@ -863,7 +863,7 @@ function HoldingsTeaser({ onOpen }: { onOpen: () => void }) {
         ) : (
           <div className="insight-foot" style={{ paddingTop: 6 }}>
             {ready
-              ? "See what you own alongside the verdicts — import an aggregated positions CSV to personalize the app."
+              ? "See what you own alongside the verdicts. Import an aggregated positions CSV to personalize the app."
               : "Loading…"}
           </div>
         ))}
@@ -916,8 +916,8 @@ function deterministicWatch(d: CheckResponse): string[] {
   if (d.glance.price.word === "Looks pricey")
     out.push("It trades near the high end of its past-year range.");
   if (d.glance.timing.word === "Running hot")
-    out.push("It has run hot recently — a pullback is possible.");
-  if (d.glance.volatility.word === "Bumpy") out.push("Moves are bumpy — expect swings.");
+    out.push("It has run hot recently. A pullback is possible.");
+  if (d.glance.volatility.word === "Bumpy") out.push("Moves are bumpy. Expect swings.");
   if (!out.length) out.push("No major red flags in the price data.");
   return out;
 }

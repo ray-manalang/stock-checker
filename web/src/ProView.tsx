@@ -73,7 +73,7 @@ const dimLabel = (k: string) =>
 const DIM_INFO: Record<string, { title: string; text: string }> = {
   earnings_quality: {
     title: "Earnings quality",
-    text: "How 'real' the reported profits are — whether actual cash flow backs up the earnings and the accounting looks clean. Higher = more trustworthy numbers.",
+    text: "How 'real' the reported profits are: whether actual cash flow backs up the earnings and the accounting looks clean. Higher = more trustworthy numbers.",
   },
   growth_trajectory: {
     title: "Growth",
@@ -85,11 +85,11 @@ const DIM_INFO: Record<string, { title: string; text: string }> = {
   },
   balance_sheet_health: {
     title: "Balance sheet",
-    text: "The strength of the company's finances — how much debt it carries versus its cash and equity. Higher = less debt risk.",
+    text: "The strength of the company's finances: how much debt it carries versus its cash and equity. Higher = less debt risk.",
   },
   balance_sheet: {
     title: "Balance sheet",
-    text: "The strength of the company's finances — how much debt it carries versus its cash and equity. Higher = less debt risk.",
+    text: "The strength of the company's finances: how much debt it carries versus its cash and equity. Higher = less debt risk.",
   },
   margin_trends: {
     title: "Margins",
@@ -97,7 +97,7 @@ const DIM_INFO: Record<string, { title: string; text: string }> = {
   },
   red_flags: {
     title: "Red flags (inverted)",
-    text: "Warning signs like ballooning receivables, one-off gains, or cash flow lagging profits. Scored inverted — a higher number means fewer red flags.",
+    text: "Warning signs like ballooning receivables, one-off gains, or cash flow lagging profits. Scored inverted: a higher number means fewer red flags.",
   },
 };
 
@@ -323,7 +323,7 @@ export function ProView({
             {macroReady
               ? refreshing.macro
                 ? "Computing market conditions…"
-                : "No reading yet — hit Refresh to score market conditions."
+                : "No reading yet. Hit Refresh to score market conditions."
               : "Loading…"}
           </div>
         )}
@@ -518,10 +518,10 @@ export function ProView({
           <div className="insight-foot" style={{ padding: "18px" }}>
             {scanReady
               ? scanner?.scannerActive === false
-                ? "Scanner is off — market conditions are defensive (no new longs)."
+                ? "Scanner is off. Market conditions are defensive (no new longs)."
                 : refreshing.scanner
                   ? "Building the first ranking…"
-                  : "No ranking yet — hit Refresh to run the scanner."
+                  : "No ranking yet. Hit Refresh to run the scanner."
               : "Loading…"}
           </div>
         )}

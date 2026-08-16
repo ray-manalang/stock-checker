@@ -6,11 +6,11 @@ export const GLOSSARY: Record<string, { title: string; text: string }> = {
   },
   quality: {
     title: "Quality",
-    text: "A read on the health of the business — profit margins, growth, and debt. 'Healthy' is strong, 'Shaky' is weak. Needs a fundamental deep-dive to rate.",
+    text: "A read on the health of the business: profit margins, growth, and debt. 'Healthy' is strong, 'Shaky' is weak. Needs a fundamental deep-dive to rate.",
   },
   price: {
     title: "Price",
-    text: "Where today's price sits versus its own past year — not a full valuation. 'Looks cheap' is near the yearly low, 'Looks pricey' is near the high.",
+    text: "Where today's price sits versus its own past year, not a full valuation. 'Looks cheap' is near the yearly low, 'Looks pricey' is near the high.",
   },
   pricepos: {
     title: "Price position",
@@ -44,7 +44,7 @@ export const GLOSSARY: Record<string, { title: string; text: string }> = {
   },
   sizing: {
     title: "Sizing",
-    text: "Suggested position size for the current conditions — 100% when green, 60% when cautious, 25% when defensive.",
+    text: "Suggested position size for the current conditions: 100% when green, 60% when cautious, 25% when defensive.",
   },
   scannerState: {
     title: "Scanner",
@@ -79,6 +79,6 @@ export const GLOSSARY: Record<string, { title: string; text: string }> = {
 
   disagreements: {
     title: "Quant vs analyst disagreements",
-    text: "Names where the blended rank (price momentum + Claude’s fundamental score) differs from the pure quant rank by 3 or more spots. An upgrade means fundamentals lifted it vs momentum alone — the business may look stronger than the chart suggests. A downgrade means fundamentals pulled it down — momentum may be running ahead of the business. Use these as a second look, not a buy/sell order.",
+    text: "Names where the blended rank (price momentum + Claude’s fundamental score) differs from the pure quant rank by 3 or more spots. An upgrade means fundamentals lifted it vs momentum alone: the business may look stronger than the chart suggests. A downgrade means fundamentals pulled it down: momentum may be running ahead of the business. Use these as a second look, not a buy/sell order.",
   },
 };

@@ -50,7 +50,7 @@ export function BacktestCard() {
       {!collapsed && (
       <>
       <div className="insight-foot" style={{ marginTop: 4 }}>
-        Were past verdicts right? Graded on direction over a 90-day window (Hold graded loosely —
+        Were past verdicts right? Graded on direction over a 90-day window (Hold graded loosely:
         no large move either way).
       </div>
 
@@ -66,7 +66,7 @@ export function BacktestCard() {
           ) : !data.ready ? (
             <div className="insight-foot" style={{ padding: "6px 18px" }}>
               {data.logged === 0
-                ? "No verdicts logged yet — this fills in as you check stocks over the coming weeks."
+                ? "No verdicts logged yet. This fills in as you check stocks over the coming weeks."
                 : `${data.logged} verdict${data.logged === 1 ? "" : "s"} logged, but none are 90 days old yet. Check back once history accrues.`}
             </div>
           ) : (
