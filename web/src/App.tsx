@@ -137,12 +137,11 @@ export default function App({ user, onLogout, onUser }: AppProps) {
   }
 
   const refreshUsage = () => {
-    if (!isAdmin) return;
-    getUsage().then(setUsage).catch(() => {});
+    getUsage().then(setUsage).catch(() => setUsage(null));
   };
   useEffect(() => {
     refreshUsage();
-  }, [isAdmin]);
+  }, []);
   useEffect(() => {
     if (data) refreshUsage();
   }, [data]);
@@ -266,7 +265,9 @@ export default function App({ user, onLogout, onUser }: AppProps) {
       )}
 
       {view === "holdings" && <HoldingsPage onBack={() => setView("main")} />}
-      {view === "profile" && <ProfilePage user={user} onUser={onUser} />}
+      {view === "profile" && (
+        <ProfilePage user={user} onUser={onUser} onDeleted={onLogout} />
+      )}
 
       {/* Research — the ticker check tool (search, recents, watchlist, answer) */}
       <div className="check-col" style={{ display: view === "research" ? undefined : "none" }}>

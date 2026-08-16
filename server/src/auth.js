@@ -28,9 +28,12 @@ import {
   updateUserProfile,
   setUserPasswordHash,
   setSessionHoldingsDekBlob,
+  deleteUserAccount,
+  countAdmins,
 } from "./db.js";
 import { putSessionDek, getSessionDek, clearSessionDek, touchSessionDek } from "./sessionVault.js";
 import { encryptExistingHoldingsForUser } from "./holdingsCrypto.js";
+import { runWithUser } from "./requestContext.js";
 import crypto from "crypto";
 
 export const SESSION_COOKIE = "ms_session";
@@ -302,6 +305,30 @@ export function changePassword(userId, sessionId, { currentPassword, newPassword
   return { ok: true, user: publicUser(findUserById(userId)) };
 }
 
+/**
+ * Delete the signed-in user's account and personal data.
+ * Requires password confirmation. Blocks deleting the last admin.
+ */
+export function deleteAccount(userId, sessionId, { password } = {}) {
+  const user = findUserById(userId);
+  if (!user) return { error: "Sign in required", status: 401 };
+  if (!password || !verifyPassword(password, user.passwordHash)) {
+    return { error: "Password is incorrect", status: 400 };
+  }
+  if (user.role === "admin" && countAdmins() <= 1) {
+    return {
+      error: "You’re the only admin — create another admin before deleting this account",
+      status: 400,
+    };
+  }
+  if (sessionId) {
+    deleteSession(sessionId);
+    clearSessionDek(sessionId);
+  }
+  deleteUserAccount(userId);
+  return { ok: true };
+}
+
 export function requireAuth(req, res, next) {
   const sid = parseCookies(req)[SESSION_COOKIE];
   if (!sid) return res.status(401).json({ error: "Sign in required" });
@@ -321,7 +348,7 @@ export function requireAuth(req, res, next) {
   req.user = publicUser(user);
   req.sessionId = sid;
   req.holdingsDek = dek;
-  next();
+  runWithUser(user.id, () => next());
 }
 
 export function requireAdmin(req, res, next) {

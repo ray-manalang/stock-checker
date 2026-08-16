@@ -8,6 +8,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { recordUsage } from "./db.js";
+import { getRequestUserId } from "./requestContext.js";
 
 // Price per 1M tokens (input, output). Cache reads bill ~0.1x input, cache
 // writes ~1.25x; the Batch API is 50% off.
@@ -33,7 +34,14 @@ function costOf(model, usage, { batch = false } = {}) {
 function logUsage(kind, model, usage, opts) {
   try {
     const c = costOf(model, usage, opts);
-    recordUsage({ kind, model, inputTokens: c.inputTokens, outputTokens: c.outputTokens, cost: c.cost });
+    recordUsage({
+      kind,
+      model,
+      inputTokens: c.inputTokens,
+      outputTokens: c.outputTokens,
+      cost: c.cost,
+      userId: getRequestUserId(),
+    });
   } catch {
     /* never let accounting break a request */
   }

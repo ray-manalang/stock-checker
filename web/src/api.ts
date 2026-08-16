@@ -181,6 +181,16 @@ export type Usage = {
   cost: number;
   inputTokens: number;
   outputTokens: number;
+  since?: string;
+  today?: { calls: number; cost: number; since: string };
+  site?: {
+    calls: number;
+    cost: number;
+    inputTokens: number;
+    outputTokens: number;
+    since: string;
+    today?: { calls: number; cost: number; since: string };
+  };
 };
 
 export async function getUsage(): Promise<Usage> {
@@ -252,6 +262,15 @@ export async function changePassword(currentPassword: string, newPassword: strin
     await apiFetch("/api/account/password", {
       method: "PUT",
       body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+  );
+}
+
+export async function deleteAccount(password: string): Promise<void> {
+  await jsonOrThrow(
+    await apiFetch("/api/account", {
+      method: "DELETE",
+      body: JSON.stringify({ password }),
     }),
   );
 }

@@ -1,17 +1,21 @@
 import { FormEvent, useEffect, useState } from "react";
 import {
   changePassword,
+  deleteAccount,
   getSettings,
+  getUsage,
   updateSettings,
   type AuthUser,
+  type Usage,
 } from "./api";
 
 type Props = {
   user: AuthUser;
   onUser: (u: AuthUser) => void;
+  onDeleted: () => void;
 };
 
-export function ProfilePage({ user, onUser }: Props) {
+export function ProfilePage({ user, onUser, onDeleted }: Props) {
   const [alertEmail, setAlertEmail] = useState(user.alertEmail ?? "");
   const [emailStatus, setEmailStatus] = useState<string | null>(null);
   const [emailBusy, setEmailBusy] = useState(false);
@@ -22,12 +26,22 @@ export function ProfilePage({ user, onUser }: Props) {
   const [pwStatus, setPwStatus] = useState<string | null>(null);
   const [pwBusy, setPwBusy] = useState(false);
 
+  const [usage, setUsage] = useState<Usage | null>(null);
+
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteStatus, setDeleteStatus] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
   useEffect(() => {
     getSettings()
       .then((s) => {
         if (s.alertEmail != null) setAlertEmail(s.alertEmail);
       })
       .catch(() => {});
+    getUsage()
+      .then(setUsage)
+      .catch(() => setUsage(null));
   }, []);
 
   async function onSaveEmail(e: FormEvent) {
@@ -74,12 +88,69 @@ export function ProfilePage({ user, onUser }: Props) {
     }
   }
 
+  async function onDeleteAccount(e: FormEvent) {
+    e.preventDefault();
+    setDeleteStatus(null);
+    if (deleteConfirm.trim().toUpperCase() !== "DELETE") {
+      setDeleteStatus('Type DELETE to confirm');
+      return;
+    }
+    setDeleteBusy(true);
+    try {
+      await deleteAccount(deletePassword);
+      onDeleted();
+    } catch (err) {
+      setDeleteStatus(err instanceof Error ? err.message : "Couldn’t delete account");
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   return (
     <div className="profile-page">
       <header className="profile-hero">
         <h2>Profile</h2>
         <p className="subtitle">Account settings for {user.username}</p>
       </header>
+
+      <section className="insight-card profile-card">
+        <h3>Claude usage</h3>
+        <p className="subtitle">
+          Cost of deep-dives attributed to your checks this month
+          {usage?.llm ? "" : " (LLM not configured on this server)"}.
+        </p>
+        {usage ? (
+          <dl className="profile-dl">
+            <div>
+              <dt>This month</dt>
+              <dd>
+                ${usage.cost.toFixed(2)} · {usage.calls} {usage.calls === 1 ? "call" : "calls"}
+              </dd>
+            </div>
+            {usage.today && (
+              <div>
+                <dt>Today</dt>
+                <dd>
+                  ${Number(usage.today.cost).toFixed(2)} · {usage.today.calls}{" "}
+                  {usage.today.calls === 1 ? "call" : "calls"}
+                </dd>
+              </div>
+            )}
+            {usage.site && (
+              <div>
+                <dt>Site-wide (admin)</dt>
+                <dd>
+                  ${usage.site.cost.toFixed(2)} · {usage.site.calls} calls this month
+                </dd>
+              </div>
+            )}
+          </dl>
+        ) : (
+          <p className="subtitle" style={{ marginTop: 10 }}>
+            Usage unavailable.
+          </p>
+        )}
+      </section>
 
       <section className="insight-card profile-card">
         <h3>Alert email</h3>
@@ -191,6 +262,53 @@ export function ProfilePage({ user, onUser }: Props) {
             <dd>{user.role === "admin" ? "Admin" : "Member"}</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="insight-card profile-card profile-danger">
+        <h3>Delete account</h3>
+        <p className="subtitle">
+          Permanently removes your watchlist, holdings, alerts, and settings from this server.
+          Shared market data is kept. This cannot be undone.
+        </p>
+        <form className="profile-form" onSubmit={onDeleteAccount}>
+          <label className="auth-field">
+            <span>Password</span>
+            <input
+              type="password"
+              value={deletePassword}
+              onChange={(e) => {
+                setDeletePassword(e.target.value);
+                setDeleteStatus(null);
+              }}
+              autoComplete="current-password"
+              required
+            />
+          </label>
+          <label className="auth-field">
+            <span>
+              Type <strong>DELETE</strong> to confirm
+            </span>
+            <input
+              value={deleteConfirm}
+              onChange={(e) => {
+                setDeleteConfirm(e.target.value);
+                setDeleteStatus(null);
+              }}
+              autoComplete="off"
+              required
+            />
+          </label>
+          <div className="profile-actions">
+            <button type="submit" className="pill-btn pill-btn-danger" disabled={deleteBusy}>
+              {deleteBusy ? "…" : "Delete my account"}
+            </button>
+            {deleteStatus && (
+              <span className="account-status" style={{ color: "var(--down)" }} role="status">
+                {deleteStatus}
+              </span>
+            )}
+          </div>
+        </form>
       </section>
     </div>
   );

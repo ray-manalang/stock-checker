@@ -583,9 +583,50 @@ function ImportPanel({
       </div>
       <div className="insight-foot" style={{ marginTop: 0 }}>
         Drop your aggregated positions CSV (one file across all brokerages). Re-importing replaces
-        your holdings — it's a snapshot, not a running log. Nothing is uploaded anywhere; parsing
-        happens on your own box.
+        your holdings — it's a snapshot, not a running log. Nothing leaves this server.
       </div>
+
+      <details className="csv-help">
+        <summary>CSV format &amp; instructions</summary>
+        <div className="csv-help-body">
+          <p>
+            Export positions from your brokerage (or combine accounts into one file). The first
+            row must be headers. Required columns: <strong>ticker</strong> and{" "}
+            <strong>shares</strong>. Optional: cost basis (per share or total) and institution.
+          </p>
+          <p>Cash sweeps, money-market funds, and CUSIPs are skipped automatically.</p>
+          <p className="csv-help-label">Example</p>
+          <pre className="csv-sample">{`Symbol,Quantity,Average Cost Basis,Institution
+AAPL,10,178.50,Fidelity
+MSFT,5,410.00,Fidelity
+BRK.B,2,405.25,Schwab
+SPAXX,1200.55,1.00,Fidelity`}</pre>
+          <p>
+            After upload you’ll map columns (remembered next time). Dots in tickers like{" "}
+            <code>BRK.B</code> are fine — they’re normalized to Yahoo’s <code>BRK-B</code> form.
+          </p>
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            onClick={() => {
+              const sample = `Symbol,Quantity,Average Cost Basis,Institution
+AAPL,10,178.50,Fidelity
+MSFT,5,410.00,Fidelity
+BRK.B,2,405.25,Schwab
+`;
+              const blob = new Blob([sample], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "holdings-sample.csv";
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            Download sample CSV
+          </button>
+        </div>
+      </details>
 
       {summary ? (
         <div>

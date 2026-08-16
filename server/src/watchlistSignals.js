@@ -14,6 +14,7 @@ import {
 } from "./db.js";
 import { notifyPush } from "./notify.js";
 import { resolveName } from "./scanner/universe.js";
+import { runWithUser } from "./requestContext.js";
 
 function appBaseUrl() {
   return process.env.APP_BASE_URL?.trim().replace(/\/$/, "") || "";
@@ -42,7 +43,7 @@ export async function checkWatchlistSignals() {
       checked++;
       let result;
       try {
-        result = await analyzeTicker(ticker, { deep: true });
+        result = await runWithUser(userId, () => analyzeTicker(ticker, { deep: true }));
       } catch {
         continue;
       }

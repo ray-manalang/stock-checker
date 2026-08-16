@@ -70,6 +70,7 @@ import {
   updateUserProfile,
   meFromReq,
   changePassword,
+  deleteAccount,
 } from "./auth.js";
 import { rateLimit, clientIp } from "./rateLimit.js";
 
@@ -258,8 +259,19 @@ function checkDeepAllowed(wantDeep) {
 }
 
 // Month-to-date Claude usage + cost — admin ops only.
-app.get("/api/usage", requireAdmin, (_req, res) => {
-  res.json({ llm: llmConfigured(), today: usageToday(), ...usageThisMonth() });
+app.get("/api/usage", (req, res) => {
+  const payload = {
+    llm: llmConfigured(),
+    ...usageThisMonth(req.user.id),
+    today: usageToday(req.user.id),
+  };
+  if (req.user.role === "admin") {
+    payload.site = {
+      ...usageThisMonth(),
+      today: usageToday(),
+    };
+  }
+  res.json(payload);
 });
 
 // Persisted history of checked stocks (survives reloads). Revisiting one
@@ -708,6 +720,15 @@ app.put("/api/account/password", (req, res) => {
     req.holdingsDek,
   );
   if (result.error) return res.status(result.status || 400).json({ error: result.error });
+  res.json({ ok: true });
+});
+
+app.delete("/api/account", (req, res) => {
+  const result = deleteAccount(req.user.id, req.sessionId, {
+    password: req.body?.password,
+  });
+  if (result.error) return res.status(result.status || 400).json({ error: result.error });
+  clearSessionCookie(res);
   res.json({ ok: true });
 });
 

@@ -86,7 +86,8 @@ export function db() {
       input_tokens INTEGER DEFAULT 0,
       output_tokens INTEGER DEFAULT 0,
       cost REAL DEFAULT 0,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      user_id INTEGER
     );
     CREATE TABLE IF NOT EXISTS verdict_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -133,6 +134,7 @@ export function db() {
     `ALTER TABLE scanner_results ADD COLUMN sector TEXT`,
     `ALTER TABLE scanner_results ADD COLUMN sector_rank INTEGER`,
     `ALTER TABLE company_names ADD COLUMN sector TEXT`,
+    `ALTER TABLE llm_usage ADD COLUMN user_id INTEGER`,
   ]) {
     try {
       _db.exec(ddl);
@@ -607,21 +609,60 @@ export function recentChecks(userId, limit = 12) {
 }
 
 // ---------- LLM usage ----------
-export function recordUsage({ kind, model, inputTokens, outputTokens, cost }) {
+export function recordUsage({ kind, model, inputTokens, outputTokens, cost, userId = null }) {
   db()
     .prepare(
-      `INSERT INTO llm_usage (kind, model, input_tokens, output_tokens, cost, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO llm_usage (kind, model, input_tokens, output_tokens, cost, created_at, user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(kind, model, inputTokens ?? 0, outputTokens ?? 0, cost ?? 0, new Date().toISOString());
+    .run(
+      kind,
+      model,
+      inputTokens ?? 0,
+      outputTokens ?? 0,
+      cost ?? 0,
+      new Date().toISOString(),
+      userId ?? null,
+    );
 }
 
-/** Cost + call/token totals for the current calendar day (UTC) — spend guard. */
-export function usageToday() {
+function usageSince(sinceIso, userId = null) {
+  const row =
+    userId != null
+      ? db()
+          .prepare(
+            `SELECT COUNT(*) AS calls,
+                    COALESCE(SUM(cost), 0) AS cost,
+                    COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                    COALESCE(SUM(output_tokens), 0) AS output_tokens
+             FROM llm_usage WHERE created_at >= ? AND user_id = ?`,
+          )
+          .get(sinceIso, userId)
+      : db()
+          .prepare(
+            `SELECT COUNT(*) AS calls,
+                    COALESCE(SUM(cost), 0) AS cost,
+                    COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                    COALESCE(SUM(output_tokens), 0) AS output_tokens
+             FROM llm_usage WHERE created_at >= ?`,
+          )
+          .get(sinceIso);
+  return {
+    calls: row.calls,
+    cost: Number(Number(row.cost).toFixed(4)),
+    inputTokens: row.input_tokens,
+    outputTokens: row.output_tokens,
+    since: sinceIso,
+  };
+}
+
+/** Cost + call/token totals for the current calendar day (UTC) — spend guard (site-wide). */
+export function usageToday(userId = null) {
   const now = new Date();
   const dayStart = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   ).toISOString();
+  if (userId != null) return usageSince(dayStart, userId);
   const row = db()
     .prepare(
       `SELECT COUNT(*) AS calls, COALESCE(SUM(cost), 0) AS cost
@@ -632,27 +673,12 @@ export function usageToday() {
 }
 
 /** Cost + call/token totals for the current calendar month (UTC). */
-export function usageThisMonth() {
+export function usageThisMonth(userId = null) {
   const now = new Date();
   const monthStart = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
   ).toISOString();
-  const row = db()
-    .prepare(
-      `SELECT COUNT(*) AS calls,
-              COALESCE(SUM(cost), 0) AS cost,
-              COALESCE(SUM(input_tokens), 0) AS input_tokens,
-              COALESCE(SUM(output_tokens), 0) AS output_tokens
-       FROM llm_usage WHERE created_at >= ?`,
-    )
-    .get(monthStart);
-  return {
-    calls: row.calls,
-    cost: Number(row.cost.toFixed(4)),
-    inputTokens: row.input_tokens,
-    outputTokens: row.output_tokens,
-    since: monthStart,
-  };
+  return usageSince(monthStart, userId);
 }
 
 // ---------- price cache (24h) ----------
@@ -857,6 +883,32 @@ export function updateUserProfile(userId, { alertEmail } = {}) {
 
 export function setUserPasswordHash(userId, passwordHash) {
   db().prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).run(passwordHash, userId);
+}
+
+/** Count of users with role=admin. */
+export function countAdmins() {
+  return db().prepare(`SELECT COUNT(*) AS n FROM users WHERE role = 'admin'`).get().n;
+}
+
+/**
+ * Wipe a user and all personal rows. Does not touch shared market caches.
+ * Caller must enforce "last admin" policy.
+ */
+export function deleteUserAccount(userId) {
+  const tx = db().transaction(() => {
+    db().prepare(`DELETE FROM watchlist WHERE user_id = ?`).run(userId);
+    db().prepare(`DELETE FROM alerts WHERE user_id = ?`).run(userId);
+    db().prepare(`DELETE FROM holdings WHERE user_id = ?`).run(userId);
+    db().prepare(`DELETE FROM holdings_flags WHERE user_id = ?`).run(userId);
+    db().prepare(`DELETE FROM recent_checks WHERE user_id = ?`).run(userId);
+    db().prepare(`DELETE FROM watchlist_verdict_state WHERE user_id = ?`).run(userId);
+    db().prepare(`DELETE FROM user_settings WHERE user_id = ?`).run(userId);
+    db().prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId);
+    db().prepare(`DELETE FROM llm_usage WHERE user_id = ?`).run(userId);
+    db().prepare(`DELETE FROM invites WHERE created_by = ? OR used_by = ?`).run(userId, userId);
+    db().prepare(`DELETE FROM users WHERE id = ?`).run(userId);
+  });
+  tx();
 }
 
 export function setUserHoldingsKeys(userId, { dekWrapped, kdfSalt }) {
