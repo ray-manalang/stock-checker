@@ -205,8 +205,16 @@ export function registerWithInvite({ token, username, password, alertEmail }) {
     return { error: "Invite expired", status: 400 };
   }
   const name = String(username ?? "").trim();
-  if (!/^[a-zA-Z0-9_]{3,32}$/.test(name)) {
-    return { error: "Username must be 3–32 letters, numbers, or _", status: 400 };
+  const usernameOk = /^[a-zA-Z0-9_]{3,32}$/.test(name);
+  // Practical email check (local@domain); length capped for the username column use.
+  const emailOk =
+    name.length <= 254 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name);
+  if (!usernameOk && !emailOk) {
+    return {
+      error: "Use a username (3–32 letters, numbers, or _) or an email address",
+      status: 400,
+    };
   }
   if (!password || String(password).length < 8) {
     return { error: "Password must be at least 8 characters", status: 400 };

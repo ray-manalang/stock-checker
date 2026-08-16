@@ -80,7 +80,7 @@ export function AuthGate({ onAuthed }: Props) {
             </label>
           )}
           <label className="auth-field">
-            <span>Username</span>
+            <span>Username or email</span>
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
